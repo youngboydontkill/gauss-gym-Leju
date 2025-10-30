@@ -440,7 +440,7 @@ termination:
   projected_gravity_z_threshold: 0.0
 
 commands:
-  name: 'goal'
+  name: 'velocity'
 
   command_gains: False
   command_gains_stiffness_range: [0.8, 1.2]

@@ -503,7 +503,7 @@ reward_penalty_curriculum:
     ]
 
 commands:
-  name: 'goal'
+  name: 'velocity'
 
   command_gains: False
   command_gains_stiffness_range: [0.8, 1.2]

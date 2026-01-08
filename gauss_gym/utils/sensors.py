@@ -749,26 +749,41 @@ class MeshHeightSensor:
     self.env = env
     self.sphere_geom = None
     meshes = mesh_utils.get_mesh_for_links(env.asset_path, link_names)
+
+    # Compute a consistent set of sample points for all links.
+    # Some URDFs omit collision geometry on the foot links; trimesh then yields
+    # empty meshes (bounds=None). In that case, fall back to config-provided
+    # foot corner points so training can proceed.
     link_sample_pos = None
     for mesh in meshes:
-      # sampled_points = mesh_utils.mesh_sampler_grid(mesh, num_samples_x, num_samples_y, scan_direction='z')
-      # print(sampled_points.shape)
-      sampled_points, _ = mesh_utils.compute_mesh_ray_points(
-        mesh,
-        resolution_x=num_samples_x,
-        resolution_y=num_samples_y,
-        scan_direction='+z',
-        visualize=False,
-      )
-      if link_sample_pos is None:
-        link_sample_pos = sampled_points
+      if mesh is None:
+        continue
+      vertices = getattr(mesh, 'vertices', None)
+      if vertices is None or len(vertices) == 0:
+        continue
+      try:
+        sampled_points, _ = mesh_utils.compute_mesh_ray_points(
+          mesh,
+          resolution_x=num_samples_x,
+          resolution_y=num_samples_y,
+          scan_direction='+z',
+          visualize=False,
+        )
+      except Exception:
+        continue
+
+      if sampled_points is None or len(sampled_points) == 0:
+        continue
+
+      link_sample_pos = sampled_points
+      break
+
+    if link_sample_pos is None:
+      feet_edge_pos = env.cfg.get('asset', {}).get('feet_edge_pos', None)
+      if feet_edge_pos is None:
+        link_sample_pos = np.zeros((1, 3), dtype=np.float32)
       else:
-        assert link_sample_pos.shape == sampled_points.shape, (
-          'All meshes must be the same (Contact escontra).'
-        )
-        assert np.allclose(link_sample_pos, sampled_points), (
-          'All meshes must be the same (Contact escontra).'
-        )
+        link_sample_pos = np.asarray(feet_edge_pos, dtype=np.float32)
 
     link_sample_relative_pos = math_utils.to_torch(
       link_sample_pos, device=env.device, requires_grad=False

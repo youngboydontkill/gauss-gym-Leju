@@ -155,6 +155,12 @@
         <color rgba="1 1 1 1" />
       </material>
     </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/l_foot_roll.STL" />
+      </geometry>
+    </collision>
   </link>
   <joint name="leg_l6_joint" type="revolute">
     <origin xyz="0 0 0" rpy="0 0 0" />
@@ -371,6 +377,12 @@
         <color rgba="1 1 1 1" />
       </material>
     </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/r_foot_roll.STL" />
+      </geometry>
+    </collision>
   </link>
   <joint name="leg_r6_joint" type="revolute">
     <origin xyz="0 0 0" rpy="0 0 0" />

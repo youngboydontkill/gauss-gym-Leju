@@ -4,7 +4,7 @@ print_config: False
 rl_device: 'cuda:0'
 sim_device: 'cuda:0'
 graphics_device: 'cuda:0'
-headless: False
+headless: True
 logdir: 'default'
 multi_gpu: False
 multi_gpu_global_rank: 0

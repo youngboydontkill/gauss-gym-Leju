@@ -141,4 +141,18 @@ control.stiffness/damping 改成逐关节（完全照 Kuavo 表里的数）
 新增 control.effort_limit / control.velocity_limit：逐关节填入 Kuavo 的 effort/velocity limit  
 新增 asset.armature_map：逐关节填入 Kuavo 的 armature  
 将 domain_rand.dof_armature_ig_property.apply 设为 False（否则会覆盖设定的 armature_map）  
-删除了遗留的 T1 symmetries: 整段（S45 不适用；且这里 symmetry_augmentation 本来就是 False）  
+删除了遗留的 T1 symmetries: 整段（S45 不适用；且这里 symmetry_augmentation 本来就是 False）    
+
+改动文件：sensors.py  
+改动点：MeshHeightSensor.__init__  
+现在会先尝试从有效的 foot collision mesh 计算采样点  
+如果所有 foot mesh 都为空/无顶点/计算失败，则自动回退用 cfg.asset.feet_edge_pos 作为采样点（再不行就用 (1,3) 的零点）  
+这样就不会再在 compute_mesh_ray_points -> bounds[0] 处崩溃  
+
+LeggedRobot 会无条件读取 cfg['asset']['hip_link_names'] 来创建 hip_height_raycaster，而 biped_s45 的 config_vision.yaml 里缺这个字段，所以触发 KeyError: 'hip_link_names'。  
+已修复配置：  
+修改文件：config_vision.yaml  
+新增字段（在 asset: 下）：  
+hip_link_names: ['leg_l1_link', 'leg_r1_link']  
+说明：  
+URDF 里 leg_*1_joint 是与 base_link 相连的第一段（定义为 hip roll/yaw/pitch 的起点），对应的 child link 就是 leg_*1_link，用它们做 “hip 高度射线” 最合理。  

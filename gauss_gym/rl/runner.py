@@ -213,10 +213,13 @@ class Runner:
     self._flatten_parameters()
     self._set_eval_mode()
 
-    if (
+    self.symmetry_enabled = bool(
       self.cfg['algorithm']['symmetry_loss']
       or self.cfg['algorithm']['symmetry_augmentation']
-    ):
+    )
+    self.symmetry_lookup = {}
+
+    if self.symmetry_enabled:
       assert 'symmetries' in self.cfg, (
         'Need `symmetries` in config when symmetry is enabled. Look at a1/config.yaml for an example.'
       )
@@ -227,6 +230,9 @@ class Runner:
       assert 'actions' in self.symmetry_lookup
 
   def _get_symmetry_fn(self, obs_group, obs_name):
+    if not self.symmetry_enabled:
+      return lambda val: val
+
     assert obs_group in self.symmetry_lookup, (
       f'{obs_group} not in {self.symmetry_lookup}'
     )

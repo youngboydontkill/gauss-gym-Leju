@@ -265,6 +265,9 @@ asset:
   file: '{GAUSS_GYM_ROOT_DIR}/resources/robots/biped_s45/urdf/biped_s45.urdf'
   name: 'biped_s45'
   base_link_name: 'base_link'
+  # Hip links (used by hip_height_raycaster). For this URDF, the hip joints are
+  # leg_*1_joint, so the corresponding child links are leg_*1_link.
+  hip_link_names: ['leg_l1_link', 'leg_r1_link']
   # Mount the camera on the head link (exists in URDF).
   camera_link_name: 'zhead_2_link'
   # Prefer explicit foot rigid bodies (one body per foot).

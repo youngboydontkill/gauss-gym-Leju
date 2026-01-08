@@ -4,6 +4,7 @@ import gauss_gym
 from gauss_gym.envs.base.legged_robot import LeggedRobot
 from gauss_gym.envs.anymal_c.anymal import Anymal
 from gauss_gym.envs.t1 import t1  # noqa: F401
+from gauss_gym.envs.biped_s45 import BipedS45
 from gauss_gym.utils import config
 
 from gauss_gym.utils.task_registry import task_registry
@@ -61,14 +62,14 @@ task_registry.register(
 
 task_registry.register(
   'biped_s45',
-  LeggedRobot,
+  BipedS45,
   config.from_yaml(
     pathlib.Path(gauss_gym.GAUSS_GYM_ENVS_DIR) / 'biped_s45' / 'config_vision.yaml'
   ),
 )
 task_registry.register(
   'biped_s45_vision',
-  LeggedRobot,
+  BipedS45,
   config.from_yaml(
     pathlib.Path(gauss_gym.GAUSS_GYM_ENVS_DIR) / 'biped_s45' / 'config_vision.yaml'
   ),

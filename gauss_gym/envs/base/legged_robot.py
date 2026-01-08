@@ -731,6 +731,29 @@ class LeggedRobot(base_task.BaseTask):
     Returns:
         [numpy.array]: Modified DOF properties
     """
+
+    def _lookup_limit(override_cfg, dof_name: str):
+      """Lookup override values by exact match first, then substring match.
+
+      Note: Config keys must be simple strings (no regex) due to Config constraints.
+      """
+
+      if override_cfg is None:
+        return None
+      if isinstance(override_cfg, (int, float)):
+        return float(override_cfg)
+      if isinstance(override_cfg, (tuple, list)):
+        # Caller handles list/tuple length checks.
+        return None
+      if isinstance(override_cfg, dict):
+        if dof_name in override_cfg:
+          return float(override_cfg[dof_name])
+        for key, val in override_cfg.items():
+          if key in dof_name:
+            return float(val)
+        return None
+      raise TypeError(f'Unsupported override type: {type(override_cfg)}')
+
     if env_id == 0:
       self.dof_pos_limits = torch.zeros(
         self.num_dof, 2, dtype=torch.float, device=self.device, requires_grad=False
@@ -746,20 +769,58 @@ class LeggedRobot(base_task.BaseTask):
         self.dof_pos_limits[i, 1] = props['upper'][i].item()
         self.dof_vel_limits[i] = props['velocity'][i].item()
         self.torque_limits[i] = props['effort'][i].item()
-      # allow config to override torque limits
-      if 'torque_limits' in self.cfg['control']:
-        if not isinstance(self.cfg['control']['torque_limits'], (tuple, list)):
-          self.torque_limits = torch.ones(
-            self.num_dof, dtype=torch.float, device=self.device, requires_grad=False
-          )
-          self.torque_limits *= self.cfg['control']['torque_limits']
-        else:
-          self.torque_limits = torch.tensor(
-            self.cfg['control']['torque_limits'],
-            dtype=torch.float,
-            device=self.device,
-            requires_grad=False,
-          )
+
+    # ---- Optional per-joint overrides (applied for all envs) ----
+    # Effort / torque limits
+    effort_override = self.cfg['control'].get('effort_limit', None)
+    if effort_override is None and 'torque_limits' in self.cfg['control']:
+      # Backward-compatible support (scalar or list). Applied after URDF load.
+      effort_override = self.cfg['control']['torque_limits']
+    if isinstance(effort_override, (int, float)):
+      props['effort'][:] = float(effort_override)
+      if env_id == 0:
+        self.torque_limits[:] = float(effort_override)
+    elif isinstance(effort_override, (tuple, list)):
+      if len(effort_override) != len(props):
+        raise ValueError(
+          f'control.torque_limits must have length {len(props)} but got {len(effort_override)}'
+        )
+      props['effort'][:] = np.array(effort_override, dtype=props['effort'].dtype)
+      if env_id == 0:
+        self.torque_limits[:] = torch.tensor(
+          effort_override, dtype=torch.float, device=self.device, requires_grad=False
+        )
+    elif isinstance(effort_override, dict):
+      for i in range(len(props)):
+        val = _lookup_limit(effort_override, self.dof_names[i])
+        if val is not None:
+          props['effort'][i] = val
+          if env_id == 0:
+            self.torque_limits[i] = val
+
+    # Velocity limits
+    vel_override = self.cfg['control'].get('velocity_limit', None)
+    if isinstance(vel_override, (int, float)):
+      props['velocity'][:] = float(vel_override)
+      if env_id == 0:
+        self.dof_vel_limits[:] = float(vel_override)
+    elif isinstance(vel_override, (tuple, list)):
+      if len(vel_override) != len(props):
+        raise ValueError(
+          f'control.velocity_limit must have length {len(props)} but got {len(vel_override)}'
+        )
+      props['velocity'][:] = np.array(vel_override, dtype=props['velocity'].dtype)
+      if env_id == 0:
+        self.dof_vel_limits[:] = torch.tensor(
+          vel_override, dtype=torch.float, device=self.device, requires_grad=False
+        )
+    elif isinstance(vel_override, dict):
+      for i in range(len(props)):
+        val = _lookup_limit(vel_override, self.dof_names[i])
+        if val is not None:
+          props['velocity'][i] = val
+          if env_id == 0:
+            self.dof_vel_limits[i] = val
 
     if self.cfg['asset']['disable_joint_limits']:
       props['lower'][:] = np.finfo(props['lower'].dtype).min
@@ -787,9 +848,11 @@ class LeggedRobot(base_task.BaseTask):
           )
         )
       else:
-        props['armature'][i] = self.dof_arm_rand[env_id, i] = self.cfg['asset'][
-          'armature'
-        ]
+        armature_map = self.cfg['asset'].get('armature_map', None)
+        arm_val = _lookup_limit(armature_map, self.dof_names[i])
+        if arm_val is None:
+          arm_val = self.cfg['asset']['armature']
+        props['armature'][i] = self.dof_arm_rand[env_id, i] = arm_val
 
     return props
 
@@ -1426,9 +1489,12 @@ class LeggedRobot(base_task.BaseTask):
 
     # save body names from the asset
     self.num_bodies = len(self.body_names)
-    self.feet_names = [
-      s for s in self.body_names if self.cfg['asset']['foot_name'] in s
-    ]
+    if 'feet_names' in self.cfg['asset']:
+      self.feet_names = list(self.cfg['asset']['feet_names'])
+    else:
+      self.feet_names = [
+        s for s in self.body_names if self.cfg['asset']['foot_name'] in s
+      ]
     camera_link_names = [
       s for s in self.body_names if self.cfg['asset']['camera_link_name'] in s
     ]

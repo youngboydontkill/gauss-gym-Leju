@@ -109,3 +109,36 @@ Configs for each environment are located in `gauss_gym/envs/*/config.yaml`, and 
   - `image_encoder`, `policy`, `value`: Network parameters.
   - `algorithm`: Learning configuration.
   - `runner`: Training, logging, checkpointing params.
+
+
+# 乐聚S45开发测试
+支持显式指定脚的刚体名：在 legged_robot.py 增加 cfg['asset']['feet_names'] 优先逻辑（不再依赖模糊的子串匹配）。  
+修正 S45 视觉配置以匹配 URDF：更新 config_vision.yaml  
+asset.file 指向 biped_s45.urdf  
+asset.base_link_name: base_link  
+asset.camera_link_name: zhead_2_link  
+asset.feet_names: ['leg_l6_link','leg_r6_link']（每脚一个刚体）  
+init_state.default_joint_angles 换成 URDF 里的 28 个 revolute joint（全 0 起步）  
+control.stiffness/damping 改成用 leg_ / zarm_ / zhead_ 覆盖全部 DOF（避免 PD gain 未定义报错）  
+去掉观测里的 GAIT_PROGRESS（LeggedRobot 没有 phase）  
+关闭 algorithm.symmetry_augmentation（暂不需要对称映射）  
+关掉 domain_rand.dof_damping_ankles（原来是 T1 的 ankle_names）  
+把 T1 专属奖励项 t1_pose/feet_phase/feet_distance 的 scale 置 0，避免 _reward_* 不存在导致崩溃  
+注册任务名：在 __init__.py 增加 biped_s45 / biped_s45_vision（当前两者都指向同一个 config_vision.yaml，确保用 --task=biped_s45 也能直接跑）。    
+
+1) 训练代码侧（让力矩限制等生效）  
+在 legged_robot.py 的 _process_dof_props() 里新增支持：  
+control.effort_limit：按关节名（优先精确匹配，其次子串匹配）覆盖 DOF 的 effort，并同步更新 self.torque_limits（用于训练时 motor_clip_torque 的 torque clip、以及动作空间边界计算等）。  
+control.velocity_limit：同样方式覆盖 DOF 的 velocity，并同步 self.dof_vel_limits。  
+asset.armature_map：在未启用 armature 随机化时，按关节名覆盖 DOF 的 armature。  
+兼容性：原来的 control.torque_limits（标量或 list）仍然可用；如果配置了 control.effort_limit，它会作为更细粒度的覆盖方式。  
+2) 重写 biped_s45/config_vision.yaml（对齐 Kuavo 配置）   
+文件：config_vision.yaml  
+关键变更：  
+init_state.pos 改为 0.9（对齐 Kuavos46_CFG）  
+init_state.default_joint_angles 保持给的腿部初始姿态（-0.27/0.52/-0.3）  
+control.stiffness/damping 改成逐关节（完全照 Kuavo 表里的数）  
+新增 control.effort_limit / control.velocity_limit：逐关节填入 Kuavo 的 effort/velocity limit  
+新增 asset.armature_map：逐关节填入 Kuavo 的 armature  
+将 domain_rand.dof_armature_ig_property.apply 设为 False（否则会覆盖设定的 armature_map）  
+删除了遗留的 T1 symmetries: 整段（S45 不适用；且这里 symmetry_augmentation 本来就是 False）  

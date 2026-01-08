@@ -58,3 +58,18 @@ task_registry.register(
     pathlib.Path(gauss_gym.GAUSS_GYM_ENVS_DIR) / 'anymal_c' / 'config_vision.yaml'
   ),
 )
+
+task_registry.register(
+  'biped_s45',
+  LeggedRobot,
+  config.from_yaml(
+    pathlib.Path(gauss_gym.GAUSS_GYM_ENVS_DIR) / 'biped_s45' / 'config_vision.yaml'
+  ),
+)
+task_registry.register(
+  'biped_s45_vision',
+  LeggedRobot,
+  config.from_yaml(
+    pathlib.Path(gauss_gym.GAUSS_GYM_ENVS_DIR) / 'biped_s45' / 'config_vision.yaml'
+  ),
+)

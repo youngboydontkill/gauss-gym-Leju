@@ -61,4 +61,4 @@ scenes/*
 isaacgym/*
 .cache/*
 
-isaacgym/
+isaacgym/*.tar.gz

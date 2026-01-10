@@ -85,7 +85,7 @@ class Runner:
                 'params': {'outscale': 1.0},
               }
         self.image_encoder: models.RecurrentModel = getattr(
-          models, self.cfg['image_encoder']['class_name']
+          models, self.cfg['image_encoder']['class_name'] #RecurrentCNNModel
         )(
           reconstruct_space,
           self.image_encoder_obs_space,
@@ -424,6 +424,7 @@ class Runner:
     running_train_ratio = normalizers.RunningEMA(alpha=0.9)
     prev_train_ratio_error = 0.0
     curr_num_updates = self.cfg['image_encoder']['init_num_updates']
+    # training start
     for it in range(num_learning_iterations):
       start = time.time()
       num_enc_updates = 0
@@ -460,6 +461,7 @@ class Runner:
             )
           buffer.update_data(self.policy_key, n, obs_dict[self.policy_key])
           buffer.update_data(self.value_key, n, obs_dict[self.value_key])
+        # old policy rollout for PPO KL constraint
         with timer.section('model_act'):
           with torch.no_grad():
             dists, _, policy_hidden_states = self.policy(
@@ -517,6 +519,7 @@ class Runner:
               multi_gpu_global_rank=self.multi_gpu_global_rank,
               multi_gpu_world_size=self.multi_gpu_world_size,
             )
+            # 将训练指标添加到 learn_agg 聚合器中，用于后续日志输出和监控。
             self.learn_agg.add(image_encoder_metrics)
             self._set_eval_mode()
             num_enc_updates += num_learning_epochs * num_mini_batches
@@ -555,6 +558,7 @@ class Runner:
           )
 
       self._set_train_mode()
+      # ppo更新阶段
       self.policy_learning_rate, self.value_learning_rate, learn_stats = loss.learn_ppo(
         buffer,
         self.policy,

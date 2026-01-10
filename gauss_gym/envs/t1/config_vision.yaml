@@ -690,7 +690,7 @@ algorithm:
   clip_param: 0.2
   bound_coefs:
     actions: 0.0
-  train_image_encoder: True
+  train_image_encoder: True  # 用于区分是否带图像编码器，训练时实际训练重建头，不训练特诊提取的dino
   image_encoder_batch_size: 48
   normalize_rewards: False
   pmpo_advantages: False

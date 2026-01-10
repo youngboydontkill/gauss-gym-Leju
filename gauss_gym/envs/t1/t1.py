@@ -26,7 +26,7 @@ class T1(LeggedRobot):
         *self.cfg['commands']['gait_frequency'], (self.num_envs, 1), device=self.device
       )
     )
-
+  # 返回 next_obs_dict, final_obs_dict, self.rew_buf, reset_buf, time_out_buf, metrics
   def step(self, actions, actions_mean=None):
     phase_tp1 = self.episode_length_buf.unsqueeze(1) * self.phase_dt + self.phase_offset
     self.phase = torch.fmod(phase_tp1 + torch.pi, 2 * torch.pi) - torch.pi

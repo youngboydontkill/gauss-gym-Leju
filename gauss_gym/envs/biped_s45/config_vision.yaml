@@ -32,8 +32,8 @@ env:
     downscale_factor: 5.0
 
     # Cam offset relative to `asset.camera_link_name`.
-    cam_xyz_offset: [0., 0., 0.]
-    cam_rpy_offset: [1.571, 1.571, 3.142]
+    cam_xyz_offset: [0.0967509784707853, 0.0175003248712456, 0.125953265112721]
+    cam_rpy_offset: [0, 0.488692190558413, 0]
 
 observations:
   image_encoder:
@@ -506,7 +506,7 @@ termination:
   projected_gravity_z_threshold: 0.0
 
 commands:
-  name: 'velocity'
+  name: 'goal'
 
   command_gains: False
   command_gains_stiffness_range: [0.8, 1.2]
@@ -560,21 +560,25 @@ rewards:
     goal:
       pos_tracking.scale: 10.0
       yaw_tracking.scale: 5.0
+      vel_tracking.scale: 1.0
+      vel_tracking.tracking_sigma: 0.25
+      yaw_vel_tracking.scale: 0.5
+      yaw_vel_tracking.tracking_sigma: 0.25
       stand_at_target.scale: 0.0
       move_in_direction.scale: 1.0
       dont_wait.scale: -1.0
       dont_wait.vel_threshold: 0.2
-  survival.scale: 0.0
+  survival.scale: 0.1
   ang_vel_xy.scale: -0.15
   orientation.scale: -0.5
   action_rate.scale: -2.0
   action_rate.use_action_mean: False
-  base_height.scale: 0.0
+  base_height.scale: -0.2
   base_height.height_target: 0.655
-  t1_pose.scale: 0.0
-  feet_distance.scale: 0.0
+  s45_pose.scale: -0.02
+  feet_distance.scale: -0.2
   feet_distance.close_feet_threshold: 0.10
-  feet_phase.scale: 0.0
+  feet_phase.scale: 0.3
   feet_phase.swing_height: 0.05
   feet_phase.track_rew: False
   stumble.scale: -3.0

@@ -185,21 +185,41 @@ class LeggedRobot(base_task.BaseTask):
 
     if isinstance(actions, dict):
       act = actions['actions']
-      if 'stiffness' in actions:
-        dof_stiffness = actions['stiffness']
-      else:
-        dof_stiffness = self.default_dof_stiffness.expand(self.num_envs, -1)
-      if 'damping' in actions:
-        dof_damping = actions['damping']
-      else:
-        dof_damping = self.default_dof_damping.expand(self.num_envs, -1)
+      act_mean = actions_mean['actions']
+      stiffness_act = actions.get('stiffness', None)
+      damping_act = actions.get('damping', None)
     else:
       act = actions
-      dof_stiffness = self.default_dof_stiffness.expand(self.num_envs, -1)
-      dof_damping = self.default_dof_damping.expand(self.num_envs, -1)
+      act_mean = actions_mean
+      stiffness_act = None
+      damping_act = None
+
+    # Expand action-space tensors to per-DOF tensors.
+    assert act.shape[-1] == self.num_actions, (
+      f'Expected actions last dim {self.num_actions}, got {act.shape[-1]}'
+    )
+    dof_act = torch.zeros(
+      self.num_envs,
+      self.num_dof,
+      dtype=act.dtype,
+      device=self.device,
+      requires_grad=False,
+    )
+    dof_act[:, self.action_dof_indices] = act
+
+    dof_stiffness = self.default_dof_stiffness.expand(self.num_envs, -1)
+    dof_damping = self.default_dof_damping.expand(self.num_envs, -1)
+    if stiffness_act is not None:
+      assert stiffness_act.shape[-1] == self.num_actions
+      dof_stiffness = dof_stiffness.clone()
+      dof_stiffness[:, self.action_dof_indices] = stiffness_act
+    if damping_act is not None:
+      assert damping_act.shape[-1] == self.num_actions
+      dof_damping = dof_damping.clone()
+      dof_damping[:, self.action_dof_indices] = damping_act
 
     self.actions[:] = act
-    self.actions_mean[:] = actions_mean['actions']
+    self.actions_mean[:] = act_mean
     self.stiffness[:] = dof_stiffness
     self.damping[:] = dof_damping
 
@@ -208,9 +228,9 @@ class LeggedRobot(base_task.BaseTask):
     with timer.section('physics_step'):
       for dec_i in range(self.cfg['control']['decimation']):
         self.pre_decimation_step(dec_i)
-        self.torques = self._compute_torques(act, dof_stiffness, dof_damping).view(
-          self.torques.shape
-        )
+        self.torques = self._compute_torques(
+          dof_act, dof_stiffness, dof_damping
+        ).view(self.torques.shape)
         with timer.section('simulate'):
           self.gym.set_dof_actuation_force_tensor(
             self.sim, gymtorch.unwrap_tensor(self.torques)
@@ -1194,7 +1214,7 @@ class LeggedRobot(base_task.BaseTask):
     )
     self.torques = torch.zeros(
       self.num_envs,
-      self.num_actions,
+      self.num_dof,
       dtype=torch.float,
       device=self.device,
       requires_grad=False,
@@ -1215,14 +1235,14 @@ class LeggedRobot(base_task.BaseTask):
     )
     self.stiffness = torch.zeros(
       self.num_envs,
-      self.num_actions,
+      self.num_dof,
       dtype=torch.float,
       device=self.device,
       requires_grad=False,
     )
     self.damping = torch.zeros(
       self.num_envs,
-      self.num_actions,
+      self.num_dof,
       dtype=torch.float,
       device=self.device,
       requires_grad=False,
@@ -1243,14 +1263,14 @@ class LeggedRobot(base_task.BaseTask):
     )
     self.last_stiffness = torch.zeros(
       self.num_envs,
-      self.num_actions,
+      self.num_dof,
       dtype=torch.float,
       device=self.device,
       requires_grad=False,
     )
     self.last_damping = torch.zeros(
       self.num_envs,
-      self.num_actions,
+      self.num_dof,
       dtype=torch.float,
       device=self.device,
       requires_grad=False,
@@ -1259,7 +1279,7 @@ class LeggedRobot(base_task.BaseTask):
     self.last_root_vel = torch.zeros_like(self.root_states[:, 7:13])
     self.last_torques = torch.zeros(
       self.num_envs,
-      self.num_actions,
+      self.num_dof,
       dtype=torch.float,
       device=self.device,
       requires_grad=False,
@@ -1331,7 +1351,7 @@ class LeggedRobot(base_task.BaseTask):
     self.substep_torques = torch.zeros(
       self.num_envs,
       self.cfg['control']['decimation'],
-      self.num_actions,
+      self.num_dof,
       dtype=torch.float,
       device=self.device,
       requires_grad=False,
@@ -1527,7 +1547,19 @@ class LeggedRobot(base_task.BaseTask):
     else:
       rear_hip_names = []
 
-    self.num_actions = self.num_dof
+    exclude_action_dof_names = self.cfg['control'].get('exclude_action_dof_names', [])
+    if exclude_action_dof_names is None:
+      exclude_action_dof_names = []
+    excluded = [
+      any(excl in dof_name for excl in exclude_action_dof_names)
+      for dof_name in self.dof_names
+    ]
+    self.action_dof_indices = torch.tensor(
+      [i for i, is_excluded in enumerate(excluded) if not is_excluded],
+      dtype=torch.long,
+      device=self.device,
+    )
+    self.num_actions = int(self.action_dof_indices.numel())
 
     self.hip_names = list(set(front_hip_names + rear_hip_names))
     if len(self.hip_names) > 0:

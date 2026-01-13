@@ -156,3 +156,24 @@ LeggedRobot 会无条件读取 cfg['asset']['hip_link_names'] 来创建 hip_heig
 hip_link_names: ['leg_l1_link', 'leg_r1_link']  
 说明：  
 URDF 里 leg_*1_joint 是与 base_link 相连的第一段（定义为 hip roll/yaw/pitch 的起点），对应的 child link 就是 leg_*1_link，用它们做 “hip 高度射线” 最合理。  
+
+## 1.12 固定头部角度  
+代码改动：legged_robot.py  
+
+新增 control.exclude_action_dof_names：从 self.dof_names 里按名字/前缀匹配排除 DOF，self.num_actions 自动变小  
+step() 里把 actions (num_actions) 展开成 dof_act (num_dof)，被排除的 DOF 的 action 恒为 0 ⇒ 目标就是 default_joint_angles  
+torques/substep_torques/last_torques 改为 始终按 num_dof 分配，避免 action 维度变小后喂给 IsaacGym 的力张量维度错误  
+在 config_vision.yaml 修改  
+
+固定头部且不作为 action 输出：  
+control.exclude_action_dof_names: ['zhead_1_joint', 'zhead_2_joint']  
+低头（通过默认角度实现，action=0 会一直追这个角度）：  
+init_state.default_joint_angles.zhead_2_joint: -0.35      
+  
+ImageEncoderWrapper：  
+Runner 会把 self.env 包一层 wrappers.ImageEncoderWrapper(...)，负责在 reset/step 时把IMAGE_ENCODER_LATENT（key 名就是 image_encoder）注入到 policy/critic obs dict。  
+如果在测试里用了“原始 env”的 env.reset()/env.step()（而不是 runner.env.reset()/runner.env.  step()），那 obs['policy'] 里就会缺 image_encoder，从而触发 KeyError。  
+修正方式：smoke test 里一律用 runner.env.reset()（或直接走 runner.predict(...)）。  
+
+
+gauss_train --task=biped_s45 --sim_device=cuda:1 --rl_device=cuda:1 --headless=True --env.num_envs 512

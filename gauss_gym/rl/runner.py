@@ -475,10 +475,20 @@ class Runner:
         with timer.section('env_step'):
           # Log action distributions.
           for k, v in actions.items():
+            if v.shape[-1] == self.env.num_dof:
+              dof_names = list(self.env.dof_names)
+            elif (
+              v.shape[-1] == self.env.num_actions
+              and hasattr(self.env, 'action_dof_indices')
+            ):
+              action_dof_indices = self.env.action_dof_indices.detach().cpu().tolist()
+              dof_names = [self.env.dof_names[i] for i in action_dof_indices]
+            else:
+              dof_names = [f'dof_{i}' for i in range(v.shape[-1])]
             self.action_agg.add(
               {
                 f'{dof_name}_{k}': v[:, dof_idx].cpu().numpy()
-                for dof_idx, dof_name in enumerate(self.env.dof_names)
+                for dof_idx, dof_name in enumerate(dof_names)
               },
               agg='concat',
             )

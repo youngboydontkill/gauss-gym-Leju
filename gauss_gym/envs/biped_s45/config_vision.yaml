@@ -1,9 +1,9 @@
 seed: -1
 task: 'biped_s45'
 print_config: False
-rl_device: 'cuda:0'
-sim_device: 'cuda:0'
-graphics_device: 'cuda:0'
+rl_device: 'cuda:1'
+sim_device: 'cuda:1'
+graphics_device: 'cuda:1'
 headless: False
 logdir: 'default'
 multi_gpu: False
@@ -32,8 +32,9 @@ env:
     downscale_factor: 5.0
 
     # Cam offset relative to `asset.camera_link_name`.
-    cam_xyz_offset: [0.0967509784707853, 0.0175003248712456, 0.125953265112721]
-    cam_rpy_offset: [0, 0.488692190558413, 0]
+    cam_xyz_offset: [0., 0., 0.]
+    # 奇怪参数，第二个控制的是yaw，第三个是roll，第一个也是roll？
+    cam_rpy_offset: [1.571, 1.571, 3.142]
 
 observations:
   image_encoder:
@@ -84,7 +85,7 @@ observations:
 
 terrain:
   scene_root: '{GAUSS_GYM_ROOT_DIR}/scenes'
-  cams_yaw_only: True
+  cams_yaw_only: False
   static_friction: 1.0
   dynamic_friction: 1.0
   restitution: 0.
@@ -96,7 +97,7 @@ terrain:
       class_name: GaussGymData
       split_frac: 1.0
       repo_id: 'escontra/gauss_gym_data'
-      scene: ''
+      scene: 'amazon_stairs'
     grand_tour:
       class_name: GrandTourData
       split_frac: 0.0
@@ -138,11 +139,15 @@ init_state:
     zarm_r5_joint: 0.0
     zarm_r6_joint: 0.0
     zarm_r7_joint: 0.0
+    # Keep head fixed, slightly pitched down. Adjust sign/magnitude if needed.
     zhead_1_joint: 0.0
     zhead_2_joint: 0.0
 
 control:
   control_type: P
+  # Exclude these DOFs from the policy action vector; they will be held at
+  # their default_joint_angles (since action=0 targets default_dof_pos).
+  exclude_action_dof_names: ['zhead_1_joint', 'zhead_2_joint']
   stiffness: # [N*m/rad]
     leg_l1_joint: 100.0
     leg_r1_joint: 100.0
@@ -262,14 +267,14 @@ control:
   clip_torque_scale: 1.0 # TODO(escontra): for sweep, remove.
 
 asset:
-  file: '{GAUSS_GYM_ROOT_DIR}/resources/robots/biped_s45/urdf/biped_s45.urdf'
+  file: '{GAUSS_GYM_ROOT_DIR}/resources/robots/biped_s45/urdf/biped_s45_waist_cam.urdf'
   name: 'biped_s45'
   base_link_name: 'base_link'
   # Hip links (used by hip_height_raycaster). For this URDF, the hip joints are
   # leg_*1_joint, so the corresponding child links are leg_*1_link.
   hip_link_names: ['leg_l1_link', 'leg_r1_link']
-  # Mount the camera on the head link (exists in URDF).
-  camera_link_name: 'zhead_2_link'
+  # Mount the camera on the waist camera link (exists in the waist-cam URDF).
+  camera_link_name: 'waist_camera'
   # Prefer explicit foot rigid bodies (one body per foot).
   feet_names: ['leg_l6_link', 'leg_r6_link']
   # Fallback if feet_names is omitted.
@@ -506,7 +511,7 @@ termination:
   projected_gravity_z_threshold: 0.0
 
 commands:
-  name: 'goal'
+  name: 'velocity'
 
   command_gains: False
   command_gains_stiffness_range: [0.8, 1.2]

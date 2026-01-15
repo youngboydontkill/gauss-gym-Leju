@@ -218,6 +218,25 @@ z≈−0.0595（用 trimesh 读了 bounds）
 
 ## TODO  
 走路太不像人了。缝AMP
+
+### AMP 训练（实验）
+AMP 训练由 `algorithm.amp` 控制（默认关闭）。启用后会用 AMP 判别器生成奖励并更新判别器。
+
+示例（需准备 motion JSON 文件）：
+```bash
+gauss_train --task=biped_s45 \
+  --algorithm.amp.enabled=True \
+  --algorithm.amp.motion_files=/path/to/motion_amp_0.json,/path/to/motion_amp_1.json
+```
+
+常用配置项（`config_vision.yaml` 里可调整）：
+- `algorithm.amp.reward_coef`：AMP 奖励权重
+- `algorithm.amp.task_reward_lerp`：与任务奖励线性混合比例
+- `algorithm.amp.discr_hidden_dims`：判别器隐藏层
+- `algorithm.amp.obs_components`：AMP 观测组成（`dof_pos/dof_vel/feet_pos`）
+- `algorithm.amp.obs_slice`：从 motion “Frames” 中截取 AMP 观测区间
+- `algorithm.amp.dof_name_prefixes`：参与 AMP 的关节前缀（biped_s45 建议 `leg_` + `zarm_`）
+- `algorithm.amp.end_effector_links`：末端 link 列表（biped_s45 建议脚 + 手腕）
  
 
 gauss_train --task=biped_s45 --sim_device=cuda:1 --rl_device=cuda:1 --headless=True --env.num_envs 512  

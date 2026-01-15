@@ -342,8 +342,11 @@ class LeggedRobot(base_task.BaseTask):
     # compute observations, rewards, resets, ...
     reset_buf, time_out_buf = self.check_termination()
 
-    # Compute next obs before reset.
+    # Compute next obs and AMP obs before reset.
     final_obs_dict = self.obs_manager.compute_obs(self)
+    amp_obs_next = None
+    if self.cfg.get('algorithm', {}).get('amp', {}).get('enabled', False):
+      amp_obs_next = self.get_amp_obs().detach()
 
     self.compute_reward(reset_buf, time_out_buf)
 
@@ -382,6 +385,8 @@ class LeggedRobot(base_task.BaseTask):
 
     reset_env_ids = reset_buf.nonzero(as_tuple=False).flatten()
     metrics = self.reset_idx(reset_env_ids, time_out_buf)
+    if amp_obs_next is not None:
+      metrics['amp_obs_next'] = amp_obs_next
     self.prev_reset = reset_env_ids
 
     # Resample command scales. Commands are updated every timestep to guide
@@ -1177,6 +1182,50 @@ class LeggedRobot(base_task.BaseTask):
     feet_ang_vel = feet_state[:, :, 10:13]
     return feet_pos, feet_quat, feet_vel, feet_ang_vel
 
+  def get_amp_obs(self):
+    amp_cfg = self.cfg.get('algorithm', {}).get('amp', {})
+    components = amp_cfg.get('obs_components', ['dof_pos', 'dof_vel', 'end_effector_pos'])
+    parts = []
+
+    dof_indices = getattr(self, 'amp_dof_indices', None)
+    if dof_indices is not None and len(dof_indices) > 0:
+      dof_pos = self.dof_pos[:, dof_indices]
+      dof_vel = self.dof_vel[:, dof_indices]
+      default_pos = self.default_dof_pos[:, dof_indices]
+    else:
+      dof_pos = self.dof_pos
+      dof_vel = self.dof_vel
+      default_pos = self.default_dof_pos
+
+    if 'dof_pos' in components:
+      if amp_cfg.get('dof_pos_relative', True):
+        dof_pos = dof_pos - default_pos
+      parts.append(dof_pos)
+
+    if 'dof_vel' in components:
+      parts.append(dof_vel)
+
+    if 'end_effector_pos' in components:
+      ee_indices = getattr(self, 'amp_end_effector_indices', None)
+      if ee_indices is None or len(ee_indices) == 0:
+        ee_indices = self.feet_indices
+      ee_state = self.rigid_body_state.view(self.num_envs, self.num_bodies, 13)[
+        :, ee_indices
+      ]
+      ee_pos = ee_state[:, :, 0:3]
+      base_pos = self.root_states[:, 0:3].unsqueeze(1)
+      ee_pos_local = (ee_pos - base_pos).reshape(-1, 3)
+      base_quat_expand = self.base_quat.repeat_interleave(ee_pos.shape[1], dim=0)
+      ee_pos_local = math_utils.quat_rotate_inverse(
+        base_quat_expand, ee_pos_local
+      ).reshape(self.num_envs, -1)
+      parts.append(ee_pos_local)
+
+    if not parts:
+      raise ValueError('AMP obs components is empty.')
+
+    return torch.cat(parts, dim=-1)
+
   # ----------------------------------------
   def _init_buffers(self):
     """Initialize torch tensors which will contain simulation states and processed quantities"""
@@ -1576,6 +1625,37 @@ class LeggedRobot(base_task.BaseTask):
       self.feet_indices[i] = self.gym.find_asset_rigid_body_index(
         self.robot_asset, self.feet_names[i]
       )
+
+    # AMP indices (optional)
+    amp_cfg = self.cfg.get('algorithm', {}).get('amp', {})
+    self.amp_dof_indices = None
+    self.amp_end_effector_indices = None
+    if amp_cfg.get('enabled', False):
+      include_prefixes = amp_cfg.get('dof_name_prefixes', None)
+      exclude_names = amp_cfg.get('dof_exclude_names', [])
+      dof_indices = []
+      for i, name in enumerate(self.dof_names):
+        if include_prefixes:
+          if not any(name.startswith(prefix) for prefix in include_prefixes):
+            continue
+        if any(excl in name for excl in exclude_names):
+          continue
+        dof_indices.append(i)
+      if dof_indices:
+        self.amp_dof_indices = torch.tensor(
+          dof_indices, dtype=torch.long, device=self.device
+        )
+
+      ee_links = amp_cfg.get('end_effector_links', [])
+      if ee_links:
+        ee_indices = []
+        for link in ee_links:
+          ee_indices.append(
+            self.gym.find_asset_rigid_body_index(self.robot_asset, link)
+          )
+        self.amp_end_effector_indices = torch.tensor(
+          ee_indices, dtype=torch.long, device=self.device
+        )
 
     self.camera_link_indices = torch.zeros(
       len(camera_link_names), dtype=torch.long, device=self.device, requires_grad=False

@@ -10,6 +10,12 @@ import torch.utils._pytree as pytree
 import gauss_gym.rl.utils as rl_utils
 from gauss_gym import utils
 from gauss_gym.rl import experience_buffer, loss, recorder
+from gauss_gym.rl.amp import (
+  AmpDiscriminator,
+  AmpMotionLoader,
+  AmpReplayBuffer,
+  RunningMeanStd,
+)
 from gauss_gym.rl.env import vec_env
 from gauss_gym.rl.modules import models, normalizers
 from gauss_gym.utils import (
@@ -126,6 +132,50 @@ class Runner:
       self.reward_normalizer = normalizers.RewardNormalizer(
         self.cfg['algorithm']['gamma'], num_envs=self.env.num_envs
       ).to(self.device)
+
+    # AMP (Adversarial Motion Prior).
+    self.amp_cfg = self.cfg.get('algorithm', {}).get('amp', {})
+    self.amp_enabled = bool(self.amp_cfg.get('enabled', False))
+    self.amp_discriminator = None
+    self.amp_optimizer = None
+    self.amp_data = None
+    self.amp_normalizer = None
+    self.amp_replay = None
+    if self.amp_enabled:
+      amp_obs = self.env.get_amp_obs()
+      self.amp_obs_dim = int(amp_obs.shape[-1])
+      motion_files = self.amp_cfg.get('motion_files', [])
+      if not motion_files:
+        raise ValueError('AMP enabled but no motion_files provided.')
+      obs_slice = self.amp_cfg.get('obs_slice', None)
+      obs_slice = tuple(obs_slice) if obs_slice is not None else None
+      step_dt = float(self.env.dt * self.cfg['control']['decimation'])
+      self.amp_data = AmpMotionLoader(
+        motion_files,
+        device=self.device,
+        time_between_frames=step_dt,
+        obs_slice=obs_slice,
+        preload_transitions=self.amp_cfg.get('preload_transitions', True),
+        num_preload_transitions=self.amp_cfg.get('num_preload_transitions', 200_000),
+        seed=self.cfg['seed'],
+      )
+      self.amp_normalizer = RunningMeanStd(self.amp_obs_dim, device=self.device)
+      hidden_dims = self.amp_cfg.get('discr_hidden_dims', [256, 128])
+      self.amp_discriminator = AmpDiscriminator(
+        self.amp_obs_dim * 2,
+        hidden_dims,
+        reward_coef=float(self.amp_cfg.get('reward_coef', 0.3)),
+        task_reward_lerp=float(self.amp_cfg.get('task_reward_lerp', 0.0)),
+      ).to(self.device)
+      self.amp_optimizer = torch.optim.Adam(
+        self.amp_discriminator.parameters(),
+        lr=float(self.amp_cfg.get('learning_rate', 1e-4)),
+      )
+      self.amp_replay = AmpReplayBuffer(
+        capacity=int(self.amp_cfg.get('replay_buffer_size', 100_000)),
+        obs_dim=self.amp_obs_dim,
+        device=self.device,
+      )
 
     policy_project_dims, value_project_dims = {}, {}
     if self.image_encoder_enabled and self.image_encoder_key in self.policy_obs_space:
@@ -400,6 +450,9 @@ class Runner:
     buffer.add_buffer('rewards', ())
     buffer.add_buffer('dones', (), dtype=bool)
     buffer.add_buffer('time_outs', (), dtype=bool)
+    if self.amp_enabled:
+      buffer.add_buffer('amp_obs', (self.amp_obs_dim,))
+      buffer.add_buffer('amp_obs_next', (self.amp_obs_dim,))
 
     if self.policy.is_recurrent:
       buffer.add_buffer(
@@ -472,6 +525,10 @@ class Runner:
             )
             actions = {k: dist.sample() for k, dist in dists.items()}
             actions_mean = {k: dist.pred() for k, dist in dists.items()}
+        amp_obs = None
+        amp_obs_next = None
+        if self.amp_enabled:
+          amp_obs = self.env.get_amp_obs().detach()
         with timer.section('env_step'):
           # Log action distributions.
           for k, v in actions.items():
@@ -496,6 +553,21 @@ class Runner:
           obs_dict, final_obs_dict, rew, done, time_out_buf, infos = self.env.step(
             actions, actions_mean
           )
+          if self.amp_enabled:
+            amp_obs_next = infos.pop('amp_obs_next', None)
+            if amp_obs_next is None:
+              amp_obs_next = self.env.get_amp_obs().detach()
+            amp_reward, amp_logits = self.amp_discriminator.predict_amp_reward(
+              amp_obs, amp_obs_next, rew, normalizer=self.amp_normalizer
+            )
+            rew = amp_reward
+            self.amp_replay.add(amp_obs, amp_obs_next)
+            self.step_agg.add(
+              {
+                'amp/reward_mean': amp_reward.mean().item(),
+                'amp/disc_mean': amp_logits.mean().item(),
+              }
+            )
           buffer.update_data(
             f'{self.policy_key}_next', n, final_obs_dict[self.policy_key]
           )
@@ -541,6 +613,9 @@ class Runner:
           buffer.update_data('rewards', n, rew)
           buffer.update_data('dones', n, done)
           buffer.update_data('time_outs', n, time_out_buf)
+          if self.amp_enabled:
+            buffer.update_data('amp_obs', n, amp_obs)
+            buffer.update_data('amp_obs_next', n, amp_obs_next)
         with timer.section('log_step'):
           bootstrapped_rew = torch.where(done, 0.0, rew)
           bootstrapped_rew = torch.where(
@@ -592,6 +667,18 @@ class Runner:
         multi_gpu_world_size=self.multi_gpu_world_size,
       )
       self.learn_agg.add(learn_stats)
+      if self.amp_enabled and self.amp_replay.size >= int(
+        self.amp_cfg.get('batch_size', 512)
+      ):
+        amp_metrics = loss.learn_amp_discriminator(
+          self.amp_replay,
+          self.amp_data,
+          self.amp_discriminator,
+          self.amp_optimizer,
+          self.amp_normalizer,
+          self.amp_cfg,
+        )
+        self.learn_agg.add(amp_metrics)
       self._set_eval_mode()
 
       if self.image_encoder_enabled:
@@ -695,6 +782,10 @@ class Runner:
             to_save['image_encoder_optimizer'] = (
               self.image_encoder_optimizer.state_dict()
             )
+          if self.amp_enabled:
+            to_save['amp_discriminator'] = self.amp_discriminator.state_dict()
+            to_save['amp_optimizer'] = self.amp_optimizer.state_dict()
+            to_save['amp_normalizer'] = self.amp_normalizer.state_dict()
           self.recorder.save(
             to_save,
             it + 1,

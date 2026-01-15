@@ -771,6 +771,24 @@ algorithm:
   image_encoder_batch_size: 48
   normalize_rewards: False
   pmpo_advantages: False
+  amp:
+    enabled: False
+    reward_coef: 0.3
+    task_reward_lerp: 0.0
+    discr_hidden_dims: [256, 128]
+    learning_rate: 1.e-4
+    batch_size: 512
+    grad_penalty_coef: 10.0
+    replay_buffer_size: 100000
+    motion_files: []
+    obs_slice: [0, 64]
+    obs_components: [dof_pos, dof_vel, end_effector_pos]
+    dof_pos_relative: True
+    dof_name_prefixes: [leg_, zarm_]
+    dof_exclude_names: []
+    end_effector_links: [leg_l6_link, leg_r6_link, zarm_l7_link, zarm_r7_link]
+    preload_transitions: True
+    num_preload_transitions: 200000
 
 runner:
   record_video: False

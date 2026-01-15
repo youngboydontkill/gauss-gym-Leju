@@ -570,3 +570,55 @@ def learn_image_encoder(
     learn_step_agg.add({f'image_encoder/param_group_{i}_lr': param_group['lr']})
 
   return learn_step_agg.result()
+
+
+def learn_amp_discriminator(
+  amp_replay,
+  amp_data,
+  discriminator: torch.nn.Module,
+  optimizer: torch.optim.Optimizer,
+  normalizer,
+  amp_cfg: Dict[str, Any],
+) -> Dict[str, float]:
+  batch_size = int(amp_cfg.get('batch_size', 512))
+  grad_penalty_coef = float(amp_cfg.get('grad_penalty_coef', 10.0))
+
+  policy_state, policy_next_state = amp_replay.sample(batch_size)
+  expert_state, expert_next_state = amp_data.sample(batch_size)
+
+  if normalizer is not None:
+    normalizer.update(policy_state)
+    normalizer.update(policy_next_state)
+    normalizer.update(expert_state)
+    normalizer.update(expert_next_state)
+    policy_state = normalizer.normalize(policy_state)
+    policy_next_state = normalizer.normalize(policy_next_state)
+    expert_state = normalizer.normalize(expert_state)
+    expert_next_state = normalizer.normalize(expert_next_state)
+
+  policy_logits = discriminator(torch.cat([policy_state, policy_next_state], dim=-1))
+  expert_logits = discriminator(torch.cat([expert_state, expert_next_state], dim=-1))
+
+  expert_target = torch.ones_like(expert_logits)
+  policy_target = -torch.ones_like(policy_logits)
+  expert_loss = torch.nn.functional.mse_loss(expert_logits, expert_target)
+  policy_loss = torch.nn.functional.mse_loss(policy_logits, policy_target)
+
+  grad_pen = discriminator.compute_grad_pen(
+    expert_state, expert_next_state, lambda_=grad_penalty_coef
+  )
+  loss = 0.5 * (expert_loss + policy_loss) + grad_pen
+
+  optimizer.zero_grad()
+  loss.backward()
+  torch.nn.utils.clip_grad_norm_(discriminator.parameters(), 1.0)
+  optimizer.step()
+
+  return {
+    'amp_loss': loss.item(),
+    'amp_expert_loss': expert_loss.item(),
+    'amp_policy_loss': policy_loss.item(),
+    'amp_grad_pen': grad_pen.item(),
+    'amp_expert_pred': expert_logits.mean().item(),
+    'amp_policy_pred': policy_logits.mean().item(),
+  }

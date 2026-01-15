@@ -99,6 +99,16 @@ class BipedS45(LeggedRobot):
     )
     return torch.sum(((self.dof_pos < lower) | (self.dof_pos > upper)).float(), dim=-1)
 
+  def _reward_knee_bend(self, knee_joint_names, threshold: float):
+    idxs = [self.dof_names.index(name) for name in knee_joint_names if name in self.dof_names]
+    if len(idxs) == 0:
+      return torch.zeros(self.num_envs, dtype=torch.float32, device=self.device)
+    idxs = torch.tensor(idxs, device=self.device)
+    dof_pos = self.dof_pos[:, idxs]
+    default_pos = self.default_dof_pos[:, idxs]
+    delta = torch.abs(dof_pos - default_pos)
+    return torch.sum(torch.relu(delta - threshold), dim=-1)
+
   def _reward_feet_roll(self):
     roll, _, _ = math_utils.get_euler_xyz(self.get_feet_state()[1].reshape(-1, 4))
     roll = (roll.reshape(self.num_envs, len(self.feet_indices)) + torch.pi) % (

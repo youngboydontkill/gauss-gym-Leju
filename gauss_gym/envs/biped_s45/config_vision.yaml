@@ -576,13 +576,17 @@ rewards:
       dont_wait.scale: -1.0
       dont_wait.vel_threshold: 0.2
   survival.scale: 0.1
-  ang_vel_xy.scale: -0.15
-  orientation.scale: -0.5
+  ang_vel_xy.scale: -0.25
+  orientation.scale: -1.5
   action_rate.scale: -2.0
   action_rate.use_action_mean: False
   base_height.scale: -0.2
   base_height.height_target: 0.655
-  s45_pose.scale: -0.5
+  s45_pose.scale: -1.0
+  knee_bend:
+    scale: -0.5
+    knee_joint_names: ['leg_l4_joint', 'leg_r4_joint']
+    threshold: 1.2
   feet_distance.scale: 0.0
   feet_distance.close_feet_threshold: 0.10
   feet_splay.scale: -0.2

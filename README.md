@@ -205,13 +205,7 @@ gauss_play --task=biped_s45 --sim_device=cuda:1 --rl_device=cuda:1 --headless=Fa
 ```  
 resume 训练
 ```bash
-gauss_train --task=biped_s45 \
-  --runner.resume=True \
-  --runner.checkpoint=/path/to/model.pth
-
-gauss_train --task=biped_s45 \
-  --runner.resume=True \
-  --runner.checkpoint=/path/to/model.pth
+gauss_train --task=biped_s45 --headless=True --env.num_envs 512 --sim_device=cuda:1 --rl_device=cuda:1  --runner.resume=True   --runner.load_run=biped_s45_2026-01-14-13-49-44   --runner.checkpoint=10877 
   ```  
   
 ## 视觉穿模” 

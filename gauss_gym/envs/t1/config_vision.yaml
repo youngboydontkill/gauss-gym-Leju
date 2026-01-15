@@ -148,7 +148,7 @@ terrain:
       class_name: GaussGymData
       split_frac: 1.0
       repo_id: 'escontra/gauss_gym_data'
-      scene: ''
+      scene: 'amazon_stairs'
     grand_tour:
       class_name: GrandTourData
       split_frac: 0.0

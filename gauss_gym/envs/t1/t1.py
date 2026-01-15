@@ -95,6 +95,17 @@ class T1(LeggedRobot):
     # distance_diff = torch.clip(feet_distance - feet_distance_ref, max=0.)
     return (feet_distance < close_feet_threshold) * 1.0
 
+    def _reward_feet_splay(self, splay_threshold: float):
+      """Penalize walking with feet too far apart laterally."""
+
+      _, _, base_yaw = math_utils.get_euler_xyz(self.base_quat)
+      feet_pos = self.get_feet_state()[0]
+      lateral_sep = torch.abs(
+        torch.cos(base_yaw) * (feet_pos[:, 1, 1] - feet_pos[:, 0, 1])
+        - torch.sin(base_yaw) * (feet_pos[:, 1, 0] - feet_pos[:, 0, 0])
+      )
+      return torch.relu(lateral_sep - splay_threshold)
+
   def _reward_feet_distance_clipped(self, feet_distance_ref):
     _, _, base_yaw = math_utils.get_euler_xyz(self.base_quat)
     feet_distance = torch.abs(

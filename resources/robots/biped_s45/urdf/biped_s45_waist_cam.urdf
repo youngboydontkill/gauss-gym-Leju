@@ -162,10 +162,10 @@
       </material>
     </visual>
     <collision>
-    	<origin xyz="0.0488 0 0" rpy="0 0 0"/>
-	    <geometry>
-		    <box size="0.25 0.1 0.04"/>
-	    </geometry>
+      <origin xyz="0.0488 0 -0.05" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.25 0.1 0.04"/>
+      </geometry>
     </collision>
   </link>
   <joint name="leg_l6_joint" type="revolute">
@@ -384,10 +384,10 @@
       </material>
     </visual>
     <collision>
-    	<origin xyz="0.0488 0 0" rpy="0 0 0"/>
-	    <geometry>
-		    <box size="0.25 0.1 0.04"/>
-	    </geometry>
+      <origin xyz="0.0488 0 -0.05" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.25 0.1 0.04"/>
+      </geometry>
     </collision>
   </link>
   <joint name="leg_r6_joint" type="revolute">
@@ -1106,7 +1106,7 @@
     type="fixed">
     <origin
       xyz="0.168717483101422 0 0.01355599662743"
-      rpy="0 0 0" />
+      rpy="0 0.698  0" />
     <parent
       link="base_link" />
     <child

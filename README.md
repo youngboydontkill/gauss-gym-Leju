@@ -176,4 +176,57 @@ Runner 会把 self.env 包一层 wrappers.ImageEncoderWrapper(...)，负责在 r
 修正方式：smoke test 里一律用 runner.env.reset()（或直接走 runner.predict(...)）。  
 
 
-gauss_train --task=biped_s45 --sim_device=cuda:1 --rl_device=cuda:1 --headless=True --env.num_envs 512
+## 1.13 配置腰部相机  
+直接在urdf中修改腰部相机pitch角，自带的rpy offset有问题  
+
+## 1.14 
+#### 步态正弦信号
+GAIT_PROGRESS 已存在：gauss_gym/utils/observations.py:gait_progress() 返回 [sin(phase), cos(phase)]  
+已在 config_vision.yaml 把 GAIT_PROGRESS 加进 policy 和 critic 的 observations 列表  
+### 新增“脚叉开惩罚”reward  
+新增 BipedS45._reward_feet_splay(splay_threshold)：超过阈值的左右脚横向间距才惩罚  
+配置里新增：  
+feet_splay.scale: -0.2  
+feet_splay.splay_threshold: 0.10  
+并把原来会“惩罚脚并拢”的 feet_distance.scale 置为 0.0 避免冲突（因为 _reward_feet_distance 是“脚距小于阈值返回 1”，原来给了负权重会反着来）   
+### 修改跳跃惩罚  
+_reward_no_fly
+
+## Play biped_s45
+
+使用训练输出的 `logs/` 目录中的 run 来回放（与其它任务一致）：
+
+```bash
+# 指定要回放的 run
+gauss_play --runner.load_run=<BIPED_S45_RUN_NAME> --sim_device=cuda:1 --rl_device=cuda:1 --headless=False --env.num_envs 1
+
+# 或者自动选择最近一次 biped_s45 的 run
+gauss_play --task=biped_s45 --sim_device=cuda:1 --rl_device=cuda:1 --headless=False --env.num_envs 1   
+```  
+resume 训练
+```bash
+gauss_train --task=biped_s45 \
+  --runner.resume=True \
+  --runner.checkpoint=/path/to/model.pth
+
+gauss_train --task=biped_s45 \
+  --runner.resume=True \
+  --runner.checkpoint=/path/to/model.pth
+  ```  
+  
+## 视觉穿模” 
+根因在 biped_s45_waist_cam.urdf 的脚部 collision box 放得太高，不是 PhysX 参数差异：t1 和 biped_s45 的 sim/physx、dt/substeps/iterations 基本一致。  
+S45 足底网格（l_foot_roll.STL/r_foot_roll.STL）的最低点在 -0.0595  
+z≈−0.0595（用 trimesh 读了 bounds）  
+但 biped_s45_waist_cam.urdf 里 leg_*6_link 的 collision box 原来中心在 z=0、厚度 0.04，底面只到 z=-0.02  
+⇒视觉网格会比碰撞体“多伸出去”约 4cm，在某些姿态/接触点（尤其没踩到 toe/heel 小球时）看起来就像脚陷进地里   
+在 biped_s45_waist_cam.urdf 把左右脚的 collision box 下移到 z=-0.0395，使 box 底面正好到 z=-0.0595，与网格足底对齐。  
+
+## TODO  
+走路太不像人了。缝AMP
+ 
+
+gauss_train --task=biped_s45 --sim_device=cuda:1 --rl_device=cuda:1 --headless=True --env.num_envs 512  
+## 1.15 
+得加角度限制
+![alt text](image.png)

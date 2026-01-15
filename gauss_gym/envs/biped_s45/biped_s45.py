@@ -136,6 +136,21 @@ class BipedS45(LeggedRobot):
     )
     return (feet_distance < close_feet_threshold) * 1.0
 
+  def _reward_feet_splay(self, splay_threshold: float):
+    """Penalize walking with feet too far apart laterally.
+
+    Computes the feet separation along the robot's left-right axis (in the base yaw
+    frame) and returns `relu(separation - splay_threshold)`.
+    """
+
+    _, _, base_yaw = math_utils.get_euler_xyz(self.base_quat)
+    feet_pos = self.get_feet_state()[0]
+    lateral_sep = torch.abs(
+      torch.cos(base_yaw) * (feet_pos[:, 1, 1] - feet_pos[:, 0, 1])
+      - torch.sin(base_yaw) * (feet_pos[:, 1, 0] - feet_pos[:, 0, 0])
+    )
+    return torch.relu(lateral_sep - splay_threshold)
+
   def _reward_feet_distance_clipped(self, feet_distance_ref: float):
     _, _, base_yaw = math_utils.get_euler_xyz(self.base_quat)
     feet_pos = self.get_feet_state()[0]
@@ -197,3 +212,19 @@ class BipedS45(LeggedRobot):
     return (left_swing & ~self.feet_contact[:, 0]).float() + (
       right_swing & ~self.feet_contact[:, 1]
     ).float()
+  def _reward_action_magnitude(self):
+    """Penalty for excessively large/violent actions.
+
+    Uses mean substep joint accelerations as a proxy for violent torque/command.
+    Returns a per-env scalar: sum of squared mean accelerations across DOFs.
+    """
+    # self.substep_dof_acc: shape (num_envs, num_substeps, num_dofs)
+    if not hasattr(self, "substep_dof_acc") or self.substep_dof_acc is None:
+      return torch.zeros(self.num_envs, dtype=torch.float32, device=self.device)
+
+    # mean acceleration per dof across substeps
+    dof_acc_mean = torch.mean(self.substep_dof_acc, dim=1)  # (num_envs, num_dofs)
+    # sum squared acceleration -> larger when commands are violent
+    acc_energy = torch.sum(torch.square(dof_acc_mean), dim=-1)  # (num_envs,)
+    return acc_energy
+    

@@ -2192,8 +2192,11 @@ class LeggedRobot(base_task.BaseTask):
     return reward
 
   def _reward_no_fly(self):
-    single_contact = torch.sum(1.0 * self.feet_contact, dim=-1) == 1
-    return 1.0 * single_contact
+    # Penalize flight (both feet are off the ground).
+    # Use a simple contact filter to reduce PhysX mesh contact flicker.
+    contact_filt = torch.logical_or(self.feet_contact[:], self.last_contacts)
+    flying = torch.sum(contact_filt.float(), dim=-1) == 0
+    return flying.float()
 
   def _reward_feet_height(self, max_foot_height):
     nonzero_command = ~self.command_manager.ignore_command_mask(self.scene_manager)

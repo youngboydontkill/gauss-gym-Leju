@@ -13,14 +13,19 @@ from gauss_gym.rl.runner import Runner  # noqa: F401
 def main(argv=None):
   log_root = pathlib.Path(os.path.join(gauss_gym.GAUSS_GYM_ROOT_DIR, 'logs'))
   load_run_path = None
-  parsed, other = flags.Flags({'runner': {'load_run': ''}}).parse_known(argv)
+  parsed, other = flags.Flags({'runner': {'load_run': ''}, 'task': ''}).parse_known(argv)
   if parsed.runner.load_run != '':
     load_run_path = log_root / parsed.runner.load_run
   else:
-    load_run_path = sorted(
-      [item for item in log_root.iterdir() if item.is_dir()],
-      key=lambda path: path.stat().st_mtime,
-    )[-1]
+    run_dirs = [item for item in log_root.iterdir() if item.is_dir()]
+    if parsed.task:
+      run_dirs = [d for d in run_dirs if d.name.startswith(parsed.task)]
+      if len(run_dirs) == 0:
+        raise ValueError(
+          f"No runs found in '{log_root}' for task='{parsed.task}'. "
+          "Provide --runner.load_run=<RUN_NAME> or train first."
+        )
+    load_run_path = sorted(run_dirs, key=lambda path: path.stat().st_mtime)[-1]
 
   cfg = helpers.get_config(load_run_path)
   cfg = cfg.update({'runner.load_run': load_run_path.name})

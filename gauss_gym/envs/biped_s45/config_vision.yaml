@@ -49,6 +49,7 @@ observations:
         BASE_LIN_VEL,
         BASE_ANG_VEL,
         PROJECTED_GRAVITY,
+        GAIT_PROGRESS,
         VELOCITY_COMMANDS,
         DOF_POS,
         DOF_VEL,
@@ -74,6 +75,7 @@ observations:
     observations: [
         BASE_ANG_VEL,
         PROJECTED_GRAVITY,
+        GAIT_PROGRESS,
         VELOCITY_COMMANDS,
         DOF_POS,
         DOF_VEL,
@@ -279,7 +281,7 @@ asset:
   feet_names: ['leg_l6_link', 'leg_r6_link']
   # Fallback if feet_names is omitted.
   foot_name: 'leg_foot'
-  penalize_contacts_on: ['base_link', 'zarm_', 'zhead_']
+  penalize_contacts_on: ['base_link', 'zarm_', 'zhead_', 'zarm_', 'zhead_']
   terminate_after_contacts_on: ['base_link', 'zhead_']
   feet_edge_pos: [
       [0.1215, 0.05, -0.03],
@@ -580,17 +582,23 @@ rewards:
   action_rate.use_action_mean: False
   base_height.scale: -0.2
   base_height.height_target: 0.655
-  s45_pose.scale: -0.02
-  feet_distance.scale: -0.2
+  s45_pose.scale: -0.5
+  feet_distance.scale: 0.0
   feet_distance.close_feet_threshold: 0.10
-  feet_phase.scale: 0.3
-  feet_phase.swing_height: 0.05
+  feet_splay.scale: -0.2
+  feet_splay.splay_threshold: 0.10
+  no_fly.scale: -2.0
+  feet_phase.scale: 5.0
+  feet_phase.swing_height: 0.1
   feet_phase.track_rew: False
   stumble.scale: -3.0
   stumble.multiplier: 2.0
   feet_slip.scale: -0.5
   feet_slip.xy_only: True
   collision.scale: 0.0
+  action_magnitude:
+    scale: -0.0
+    clip: 5.0
   penalty_foothold:
     scale: -0.5
     foothold_epsilon: 0.1
@@ -612,6 +620,7 @@ reward_penalty_curriculum:
       orientation,
       action_rate,
       base_height,
+      s45_pose,
     ]
 
 normalization:

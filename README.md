@@ -225,8 +225,10 @@ AMP 训练由 `algorithm.amp` 控制（默认关闭）。启用后会用 AMP 判
 示例（需准备 motion JSON 文件）：
 ```bash
 gauss_train --task=biped_s45 \
+  --headless=True \
+  --env.num_envs 512 \
   --algorithm.amp.enabled=True \
-  --algorithm.amp.motion_files=/path/to/motion_amp_0.json,/path/to/motion_amp_1.json
+  --algorithm.amp.motion_files=/path/to/motion_amp_0.txt,/path/to/motion_amp_1.txt
 ```
 
 常用配置项（`config_vision.yaml` 里可调整）：
@@ -239,6 +241,30 @@ gauss_train --task=biped_s45 \
 - `algorithm.amp.end_effector_links`：末端 link 列表（biped_s45 建议脚 + 手腕）
  
 
+1.15训练效果差----检查AMP数据与amp_obs是否对齐？
+看观测、顺序（gym）
+``` bash
+python -m gauss_gym.scripts.print_obs_order --config gauss_gym/envs/biped_s45/config_vision.yaml --no-sim  
+```  
+```  
+[policy]
+  base_ang_vel
+  projected_gravity
+  gait_progress
+  velocity_commands
+  dof_pos
+    dof_order(dof_pos) = ['leg_l1_joint', 'leg_l2_joint', 'leg_l3_joint', 'leg_l4_joint', 'leg_l5_joint', 'leg_l6_joint', 'leg_r1_joint', 'leg_r2_joint', 'leg_r3_joint', 'leg_r4_joint', 'leg_r5_joint', 'leg_r6_joint', 'zarm_l1_joint', 'zarm_l2_joint', 'zarm_l3_joint', 'zarm_l4_joint', 'zarm_l5_joint', 'zarm_l6_joint', 'zarm_l7_joint', 'zarm_r1_joint', 'zarm_r2_joint', 'zarm_r3_joint', 'zarm_r4_joint', 'zarm_r5_joint', 'zarm_r6_joint', 'zarm_r7_joint', 'zhead_1_joint', 'zhead_2_joint']
+  dof_vel
+    dof_order(dof_vel) = ['leg_l1_joint', 'leg_l2_joint', 'leg_l3_joint', 'leg_l4_joint', 'leg_l5_joint', 'leg_l6_joint', 'leg_r1_joint', 'leg_r2_joint', 'leg_r3_joint', 'leg_r4_joint', 'leg_r5_joint', 'leg_r6_joint', 'zarm_l1_joint', 'zarm_l2_joint', 'zarm_l3_joint', 'zarm_l4_joint', 'zarm_l5_joint', 'zarm_l6_joint', 'zarm_l7_joint', 'zarm_r1_joint', 'zarm_r2_joint', 'zarm_r3_joint', 'zarm_r4_joint', 'zarm_r5_joint', 'zarm_r6_joint', 'zarm_r7_joint', 'zhead_1_joint', 'zhead_2_joint']
+  actions
+    dof_order(actions) = ['leg_l1_joint', 'leg_l2_joint', 'leg_l3_joint', 'leg_l4_joint', 'leg_l5_joint', 'leg_l6_joint', 'leg_r1_joint', 'leg_r2_joint', 'leg_r3_joint', 'leg_r4_joint', 'leg_r5_joint', 'leg_r6_joint', 'zarm_l1_joint', 'zarm_l2_joint', 'zarm_l3_joint', 'zarm_l4_joint', 'zarm_l5_joint', 'zarm_l6_joint', 'zarm_l7_joint', 'zarm_r1_joint', 'zarm_r2_joint', 'zarm_r3_joint', 'zarm_r4_joint', 'zarm_r5_joint', 'zarm_r6_joint', 'zarm_r7_joint', 'zhead_1_joint', 'zhead_2_joint']
+  image_encoder
+```  
+
+
+## 1.16 修正amp_obs顺序，使之匹配lab风格
+代码在runner中已更改  
+并增加了输出关节顺序的脚本
 gauss_train --task=biped_s45 --sim_device=cuda:1 --rl_device=cuda:1 --headless=True --env.num_envs 512  
 ## 1.15 
 得加角度限制

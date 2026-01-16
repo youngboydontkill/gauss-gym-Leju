@@ -780,12 +780,13 @@ algorithm:
     batch_size: 512
     grad_penalty_coef: 10.0
     replay_buffer_size: 100000
-    motion_files: []
+    motion_files: [/home/hitcsc/YX/gauss_gym/ampdata/run1111.txt, /home/hitcsc/YX/gauss_gym/ampdata/run3905.txt, /home/hitcsc/YX/gauss_gym/ampdata/run3906.txt, 
+      /home/hitcsc/YX/gauss_gym/ampdata/run8336.txt, /home/hitcsc/YX/gauss_gym/ampdata/run8337.txt, /home/hitcsc/YX/gauss_gym/ampdata/run11321.txt]
     obs_slice: [0, 64]
     obs_components: [dof_pos, dof_vel, end_effector_pos]
     dof_pos_relative: True
     dof_name_prefixes: [leg_, zarm_]
-    dof_exclude_names: []
+    dof_exclude_names: [zhead_]
     end_effector_links: [leg_l6_link, leg_r6_link, zarm_l7_link, zarm_r7_link]
     preload_transitions: True
     num_preload_transitions: 200000

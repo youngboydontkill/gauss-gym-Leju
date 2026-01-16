@@ -35,6 +35,12 @@ from gauss_gym.utils import (
 torch.backends.cuda.matmul.allow_tf32 = True
 
 
+AMP_GYM2LAB_JOINT_INDEX = [
+  0, 6, 12, 19, 1, 7, 13, 20, 2, 8, 14, 21, 3, 9, 15, 22, 4, 10, 16, 23, 5,
+  11, 17, 24, 18, 25,
+]
+
+
 class Runner:
   def __init__(self, env: vec_env.VecEnv, cfg: Dict[str, Any], device='cpu'):
     self.env = env
@@ -136,6 +142,7 @@ class Runner:
     # AMP (Adversarial Motion Prior).
     self.amp_cfg = self.cfg.get('algorithm', {}).get('amp', {})
     self.amp_enabled = bool(self.amp_cfg.get('enabled', False))
+    self.amp_gym_to_lab = bool(self.amp_cfg.get('gym_to_lab', False))
     self.amp_discriminator = None
     self.amp_optimizer = None
     self.amp_data = None
@@ -365,6 +372,17 @@ class Runner:
     self.policy.eval()
     self.value.eval()
 
+  def _map_amp_obs_gym_to_lab(self, amp_obs: torch.Tensor) -> torch.Tensor:
+    if (not self.amp_gym_to_lab) or amp_obs is None:
+      return amp_obs
+    if amp_obs.shape[-1] < 64:
+      return amp_obs
+    idx = torch.as_tensor(AMP_GYM2LAB_JOINT_INDEX, device=amp_obs.device)
+    dof_pos = amp_obs[..., :26].index_select(-1, idx)
+    dof_vel = amp_obs[..., 26:52].index_select(-1, idx)
+    rest = amp_obs[..., 52:]
+    return torch.cat([dof_pos, dof_vel, rest], dim=-1)
+
   @property
   def spaces_dict(self):
     spaces_dict = {
@@ -528,7 +546,9 @@ class Runner:
         amp_obs = None
         amp_obs_next = None
         if self.amp_enabled:
-          amp_obs = self.env.get_amp_obs().detach()
+          amp_obs = self._map_amp_obs_gym_to_lab(
+            self.env.get_amp_obs().detach()
+          )
         with timer.section('env_step'):
           # Log action distributions.
           for k, v in actions.items():
@@ -557,6 +577,7 @@ class Runner:
             amp_obs_next = infos.pop('amp_obs_next', None)
             if amp_obs_next is None:
               amp_obs_next = self.env.get_amp_obs().detach()
+            amp_obs_next = self._map_amp_obs_gym_to_lab(amp_obs_next)
             amp_reward, amp_logits = self.amp_discriminator.predict_amp_reward(
               amp_obs, amp_obs_next, rew, normalizer=self.amp_normalizer
             )

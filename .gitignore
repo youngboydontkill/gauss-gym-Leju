@@ -60,6 +60,8 @@ __pycache__
 scenes/*
 isaacgym/*
 .cache/*
+*.zip
+*.txt
 
 isaacgym/*.tar.gz
 IsaacGym_Preview_4_Package.tar.gz

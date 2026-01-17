@@ -258,14 +258,24 @@ python -m gauss_gym.scripts.print_obs_order --config gauss_gym/envs/biped_s45/co
     dof_order(dof_vel) = ['leg_l1_joint', 'leg_l2_joint', 'leg_l3_joint', 'leg_l4_joint', 'leg_l5_joint', 'leg_l6_joint', 'leg_r1_joint', 'leg_r2_joint', 'leg_r3_joint', 'leg_r4_joint', 'leg_r5_joint', 'leg_r6_joint', 'zarm_l1_joint', 'zarm_l2_joint', 'zarm_l3_joint', 'zarm_l4_joint', 'zarm_l5_joint', 'zarm_l6_joint', 'zarm_l7_joint', 'zarm_r1_joint', 'zarm_r2_joint', 'zarm_r3_joint', 'zarm_r4_joint', 'zarm_r5_joint', 'zarm_r6_joint', 'zarm_r7_joint', 'zhead_1_joint', 'zhead_2_joint']
   actions
     dof_order(actions) = ['leg_l1_joint', 'leg_l2_joint', 'leg_l3_joint', 'leg_l4_joint', 'leg_l5_joint', 'leg_l6_joint', 'leg_r1_joint', 'leg_r2_joint', 'leg_r3_joint', 'leg_r4_joint', 'leg_r5_joint', 'leg_r6_joint', 'zarm_l1_joint', 'zarm_l2_joint', 'zarm_l3_joint', 'zarm_l4_joint', 'zarm_l5_joint', 'zarm_l6_joint', 'zarm_l7_joint', 'zarm_r1_joint', 'zarm_r2_joint', 'zarm_r3_joint', 'zarm_r4_joint', 'zarm_r5_joint', 'zarm_r6_joint', 'zarm_r7_joint', 'zhead_1_joint', 'zhead_2_joint']
+  origin_amp_obs joint names: ['leg_l1_joint', 'leg_l2_joint', 'leg_l3_joint',  'leg_l4_joint', 'leg_l5_joint', 'leg_l6_joint', 'leg_r1_joint', 'leg_r2_joint', 'leg_r3_joint', 'leg_r4_joint', 'leg_r5_joint', 'leg_r6_joint', 'zarm_l1_joint', 'zarm_l2_joint', 'zarm_l3_joint', 'zarm_l4_joint', 'zarm_l5_joint', 'zarm_l6_joint', 'zarm_l7_joint', 'zarm_r1_joint', 'zarm_r2_joint', 'zarm_r3_joint', 'zarm_r4_joint', 'zarm_r5_joint', 'zarm_r6_joint', 'zarm_r7_joint']
+  origin_amp_obs end-effector names: ['leg_l6_link', 'leg_r6_link', 'zarm_l7_link',       'zarm_r7_link']
+
   image_encoder
 ```  
-
+## 1.15 
+得加角度限制
 
 ## 1.16 修正amp_obs顺序，使之匹配lab风格
 代码在runner中已更改  
 并增加了输出关节顺序的脚本
 gauss_train --task=biped_s45 --sim_device=cuda:1 --rl_device=cuda:1 --headless=True --env.num_envs 512  
-## 1.15 
-得加角度限制
+
+## 1.17 
+1. 末端执行器的顺序也是错的...
+2. 完善motion loader：  
+增强采样与完整帧支持：MotionClip 增加 frames_full，支持 get_full_frame* 系列方法与全量帧插值。  
+补齐对外接口：新增 get_frame_at_time、get_frame、get_full_frame_batch、feed_forward_generator、num_motions 等，行为对齐参考实现。  
+随机性一致：新增 self.np_rng，采样与时间抽样使用带 seed 的 RNG。  
+
 ![alt text](image.png)

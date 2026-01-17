@@ -522,7 +522,7 @@ commands:
 
   velocity:
     use_ground_positions: True
-    lin_vel_range: [0.1, 0.7]
+    lin_vel_range: [0., 0.7]
     ang_vel_yaw_range: [-1, 1]
 
     max_traj_pos_distance: 1.0
@@ -560,10 +560,10 @@ rewards:
 
   task:
     velocity:
-      vel_tracking.scale: 3.0
-      vel_tracking.tracking_sigma: 0.25
-      yaw_vel_tracking.scale: 1.5
-      yaw_vel_tracking.tracking_sigma: 0.25
+      vel_tracking.scale: 4.0
+      vel_tracking.tracking_sigma: 0.5
+      yaw_vel_tracking.scale: 4.0
+      yaw_vel_tracking.tracking_sigma: 0.5
     goal:
       pos_tracking.scale: 10.0
       yaw_tracking.scale: 5.0
@@ -575,37 +575,73 @@ rewards:
       move_in_direction.scale: 1.0
       dont_wait.scale: -1.0
       dont_wait.vel_threshold: 0.2
-  survival.scale: 0.1
-  ang_vel_xy.scale: -0.25
-  orientation.scale: -1.5
-  action_rate.scale: -2.0
+  survival.scale: 0.0
+  ang_vel_xy.scale: -0.05
+  orientation.scale: -3.0
+  action_rate.scale: -0.005
   action_rate.use_action_mean: False
-  base_height.scale: -0.2
+  action_smoothness_l2.scale: -0.01
+  base_height.scale: 0.0
   base_height.height_target: 0.655
-  s45_pose.scale: -1.0
+  s45_pose.scale: -0.1
   knee_bend:
-    scale: -0.5
+    scale: 0.0
     knee_joint_names: ['leg_l4_joint', 'leg_r4_joint']
     threshold: 1.2
   feet_distance.scale: 0.0
   feet_distance.close_feet_threshold: 0.10
-  feet_splay.scale: -0.2
+  feet_splay.scale: 0.0
   feet_splay.splay_threshold: 0.10
-  no_fly.scale: -2.0
-  feet_phase.scale: 5.0
+  no_fly.scale: 0.0
+  feet_phase.scale: 0.0
   feet_phase.swing_height: 0.1
   feet_phase.track_rew: False
-  stumble.scale: -3.0
-  stumble.multiplier: 2.0
-  feet_slip.scale: -0.5
+  stumble.scale: 0.0
+  stumble.multiplier: 3.0
+  feet_slip.scale: -0.1
   feet_slip.xy_only: True
-  collision.scale: 0.0
+  collision.scale: -1.0
   action_magnitude:
-    scale: -0.0
+    scale: -0.01
     clip: 5.0
   penalty_foothold:
-    scale: -0.5
-    foothold_epsilon: 0.1
+    scale: -0.05
+    foothold_epsilon: 0.13
+  dof_acc:
+    scale: -2.5e-7
+    method: mean
+  power.scale: -2.0e-5
+  torques.scale: -1.0e-5
+  dof_pos_limits:
+    scale: -10.0
+    soft_dof_pos_limit: 0.9
+  feet_air_time:
+    scale: 1.0
+    min_air_time: 0.5
+    max_air_time: 1.0
+  feet_contact_forces:
+    scale: -0.001
+    max_contact_force: 900
+  feet_contact_without_cmd:
+    scale: 0.4
+    use_stance_mask: False
+  no_feet_contact:
+    scale: -0.1
+    use_stance_mask: False
+  track_default_arm_pos:
+    scale: 2.0
+    joint_names:
+      [
+        'zarm_l2_joint', 'zarm_l3_joint', 'zarm_l5_joint', 'zarm_l6_joint', 'zarm_l7_joint',
+        'zarm_r2_joint', 'zarm_r3_joint', 'zarm_r5_joint', 'zarm_r6_joint', 'zarm_r7_joint'
+      ]
+    alpha: 5.0
+  feet_stumble:
+    scale: -1.0
+    multiplier: 3.0
+  fly.scale: -10.0
+  stand_still.scale: -3.0
+  termination.scale: -200.0
 
 reward_penalty_curriculum:
   apply: True
@@ -787,7 +823,7 @@ algorithm:
     dof_pos_relative: True
     dof_name_prefixes: [leg_, zarm_]
     dof_exclude_names: [zhead_]
-    end_effector_links: [leg_l6_link, leg_r6_link, zarm_l7_link, zarm_r7_link]
+    end_effector_links: [zarm_l7_link, zarm_r7_link, leg_l6_link, leg_r6_link]
     preload_transitions: True
     num_preload_transitions: 200000
 

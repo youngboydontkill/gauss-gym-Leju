@@ -222,19 +222,49 @@ class BipedS45(LeggedRobot):
     return (left_swing & ~self.feet_contact[:, 0]).float() + (
       right_swing & ~self.feet_contact[:, 1]
     ).float()
-  def _reward_action_magnitude(self):
-    """Penalty for excessively large/violent actions.
-
-    Uses mean substep joint accelerations as a proxy for violent torque/command.
-    Returns a per-env scalar: sum of squared mean accelerations across DOFs.
-    """
-    # self.substep_dof_acc: shape (num_envs, num_substeps, num_dofs)
+  def _reward_action_magnitude(self, clip: float = None, **kwargs):
+    """Penalty for excessively large/violent actions."""
     if not hasattr(self, "substep_dof_acc") or self.substep_dof_acc is None:
       return torch.zeros(self.num_envs, dtype=torch.float32, device=self.device)
 
-    # mean acceleration per dof across substeps
     dof_acc_mean = torch.mean(self.substep_dof_acc, dim=1)  # (num_envs, num_dofs)
-    # sum squared acceleration -> larger when commands are violent
     acc_energy = torch.sum(torch.square(dof_acc_mean), dim=-1)  # (num_envs,)
+    if clip is not None:
+      acc_energy = torch.clamp(acc_energy, max=float(clip))
     return acc_energy
-    
+
+  def _reward_feet_contact_without_cmd(self, use_stance_mask: bool = True):
+    # Reward feet contact when no command is issued.
+    if use_stance_mask:
+      no_command = self.command_manager.ignore_command_mask(self.scene_manager)
+    else:
+      no_command = torch.linalg.norm(self.commands[:, :3], dim=1) < 0.01
+    contact_count = torch.sum(self.feet_contact.float(), dim=1)
+    return contact_count * no_command.float()
+
+  def _reward_no_feet_contact(self, use_stance_mask: bool = True):
+    # Penalize no feet contact when commands are non-zero.
+    if use_stance_mask:
+      nonzero_command = ~self.command_manager.ignore_command_mask(self.scene_manager)
+    else:
+      nonzero_command = torch.linalg.norm(self.commands[:, :3], dim=1) >= 0.01
+    no_contact = torch.sum(self.feet_contact.float(), dim=1) == 0
+    return no_contact.float() * nonzero_command.float()
+
+  def _reward_track_default_arm_pos(self, joint_names, alpha: float = 5.0):
+    # Reward arm joints staying near default positions.
+    idxs = [self.dof_names.index(name) for name in joint_names if name in self.dof_names]
+    if len(idxs) == 0:
+      return torch.zeros(self.num_envs, dtype=torch.float32, device=self.device)
+    idxs = torch.tensor(idxs, device=self.device)
+    joint_pos = self.dof_pos[:, idxs]
+    default_pos = self.default_dof_pos[:, idxs]
+    sq_dist = torch.sum(torch.square(joint_pos - default_pos), dim=1)
+    return torch.exp(-alpha * sq_dist)
+
+  def _reward_feet_stumble(self, multiplier: float):
+    return self._reward_stumble(multiplier)
+
+  def _reward_fly(self):
+    return self._reward_no_fly()
+

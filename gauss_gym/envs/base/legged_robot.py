@@ -97,6 +97,9 @@ class LeggedRobot(base_task.BaseTask):
       else:
         self.share_url = 'none'
       utils.print(f'Viser share URL: {self.share_url}', color='green')
+    self.print_ee_size =  True
+    self.print_amp_joint_names = True
+    self.print_amp_ee_names = True
 
   def clip_position_action_by_torque_limit(
     self, actions_scaled, dof_stiffness, dof_damping
@@ -351,6 +354,7 @@ class LeggedRobot(base_task.BaseTask):
     self.compute_reward(reset_buf, time_out_buf)
 
     self.swing_peak *= ~contact_filt
+    self.prev_prev_actions[:] = self.last_actions[:]
     self.last_actions[:] = self.actions[:]
     self.last_actions_mean[:] = self.actions_mean[:]
     self.last_stiffness[:] = self.stiffness[:]
@@ -995,6 +999,7 @@ class LeggedRobot(base_task.BaseTask):
     self.last_root_vel[env_ids] = 0.0
     self.last_actions[env_ids] = 0.0
     self.last_actions_mean[env_ids] = 0.0
+    self.prev_prev_actions[env_ids] = 0.0
     self.last_stiffness[env_ids] = 0.0
     self.last_damping[env_ids] = 0.0
     self.last_dof_vel[env_ids] = 0.0
@@ -1019,6 +1024,7 @@ class LeggedRobot(base_task.BaseTask):
     self.last_root_vel[env_ids] = self.root_states[env_ids, 7:13]
     self.last_actions[env_ids] = self.actions[env_ids]
     self.last_actions_mean[env_ids] = self.actions_mean[env_ids]
+    self.prev_prev_actions[env_ids] = self.last_actions[env_ids]
     self.last_stiffness[env_ids] = self.stiffness[env_ids]
     self.last_damping[env_ids] = self.damping[env_ids]
     self.last_dof_vel[env_ids] = self.dof_vel[env_ids]
@@ -1197,6 +1203,14 @@ class LeggedRobot(base_task.BaseTask):
       dof_vel = self.dof_vel
       default_pos = self.default_dof_pos
 
+    if self.print_amp_joint_names:
+      if dof_indices is not None and len(dof_indices) > 0:
+        amp_joint_names = [self.dof_names[int(i)] for i in dof_indices]
+      else:
+        amp_joint_names = list(self.dof_names)
+      utils.print(f"amp_obs joint names: {amp_joint_names}",color='green')
+      self.print_amp_joint_names = False
+
     if 'dof_pos' in components:
       if amp_cfg.get('dof_pos_relative', True):
         dof_pos = dof_pos - default_pos
@@ -1209,6 +1223,10 @@ class LeggedRobot(base_task.BaseTask):
       ee_indices = getattr(self, 'amp_end_effector_indices', None)
       if ee_indices is None or len(ee_indices) == 0:
         ee_indices = self.feet_indices
+      if self.print_amp_ee_names:
+        amp_ee_names = [self.body_names[int(i)] for i in ee_indices]
+        utils.print(f"amp_obs end-effector indices: {ee_indices}",color='green')
+        self.print_amp_ee_names = False
       ee_state = self.rigid_body_state.view(self.num_envs, self.num_bodies, 13)[
         :, ee_indices
       ]
@@ -1220,6 +1238,11 @@ class LeggedRobot(base_task.BaseTask):
         base_quat_expand, ee_pos_local
       ).reshape(self.num_envs, -1)
       parts.append(ee_pos_local)
+    # 输出end_effector_pos元素size
+    if self.print_ee_size:
+      print(f"end_effector_pos elements size: {ee_pos_local.shape}")
+      self.print_ee_size = False
+
 
     if not parts:
       raise ValueError('AMP obs components is empty.')
@@ -1297,6 +1320,13 @@ class LeggedRobot(base_task.BaseTask):
       requires_grad=False,
     )
     self.last_actions = torch.zeros(
+      self.num_envs,
+      self.num_actions,
+      dtype=torch.float,
+      device=self.device,
+      requires_grad=False,
+    )
+    self.prev_prev_actions = torch.zeros(
       self.num_envs,
       self.num_actions,
       dtype=torch.float,
@@ -2023,6 +2053,11 @@ class LeggedRobot(base_task.BaseTask):
     else:
       action_diff = self.last_actions - self.actions
     return torch.sum(torch.square(action_diff), dim=1)
+
+  def _reward_action_smoothness_l2(self):
+    # Penalize second-order action changes (smoothness)
+    action_diff2 = self.actions - 2.0 * self.last_actions + self.prev_prev_actions
+    return torch.sum(torch.square(action_diff2), dim=1)
 
   def _reward_action_rate_gains(self):
     # Re-normalize the actions to the range [-1, 1]

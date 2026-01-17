@@ -143,11 +143,25 @@ class Runner:
     self.amp_cfg = self.cfg.get('algorithm', {}).get('amp', {})
     self.amp_enabled = bool(self.amp_cfg.get('enabled', False))
     self.amp_gym_to_lab = bool(self.amp_cfg.get('gym_to_lab', False))
+    self.amp_ee_gym_to_lab = self.amp_cfg.get('end_effector_gym_to_lab_indices', None)
+    ee_links = self.amp_cfg.get('end_effector_links', None)
+    ee_lab_order = self.amp_cfg.get('end_effector_lab_order', None)
+    if ee_links and ee_lab_order:
+      ee_indices = []
+      for link_name in ee_lab_order:
+        if link_name not in ee_links:
+          raise ValueError(
+            f"end_effector_lab_order link '{link_name}' not in end_effector_links"
+          )
+        link_idx = ee_links.index(link_name)
+        ee_indices.extend([3 * link_idx, 3 * link_idx + 1, 3 * link_idx + 2])
+      self.amp_ee_gym_to_lab = ee_indices
     self.amp_discriminator = None
     self.amp_optimizer = None
     self.amp_data = None
     self.amp_normalizer = None
     self.amp_replay = None
+    self.print_amp_obs_order = True
     if self.amp_enabled:
       amp_obs = self.env.get_amp_obs()
       self.amp_obs_dim = int(amp_obs.shape[-1])
@@ -373,6 +387,31 @@ class Runner:
     self.value.eval()
 
   def _map_amp_obs_gym_to_lab(self, amp_obs: torch.Tensor) -> torch.Tensor:
+    if self.print_amp_obs_order and self.rank_zero:
+      amp_shape = None if amp_obs is None else tuple(amp_obs.shape)
+      utils.print(
+        f"amp_obs map called: gym_to_lab={self.amp_gym_to_lab}, shape={amp_shape}",
+        color='yellow',
+      )
+      dof_names = list(self.env.dof_names)
+      mapped_dof_names = [dof_names[i] for i in AMP_GYM2LAB_JOINT_INDEX]
+      if self.amp_ee_gym_to_lab is not None:
+        ee_names = self.amp_cfg.get('end_effector_lab_order', None)
+        if ee_names is None:
+          ee_names = list(self.amp_cfg.get('end_effector_links', []))
+      else:
+        ee_names = list(self.amp_cfg.get('end_effector_links', []))
+      utils.print(
+        f"amp_obs mapped order (dof_pos): {mapped_dof_names}", color='green'
+      )
+      utils.print(
+        f"amp_obs mapped order (dof_vel): {mapped_dof_names}", color='green'
+      )
+      if ee_names:
+        utils.print(
+          f"amp_obs mapped order (end_effector_pos): {ee_names}", color='green'
+        )
+      self.print_amp_obs_order = False
     if (not self.amp_gym_to_lab) or amp_obs is None:
       return amp_obs
     if amp_obs.shape[-1] < 64:
@@ -381,6 +420,10 @@ class Runner:
     dof_pos = amp_obs[..., :26].index_select(-1, idx)
     dof_vel = amp_obs[..., 26:52].index_select(-1, idx)
     rest = amp_obs[..., 52:]
+    if self.amp_ee_gym_to_lab is not None:
+      ee_idx = torch.as_tensor(self.amp_ee_gym_to_lab, device=amp_obs.device)
+      if rest.shape[-1] >= len(ee_idx):
+        rest = rest.index_select(-1, ee_idx)
     return torch.cat([dof_pos, dof_vel, rest], dim=-1)
 
   @property

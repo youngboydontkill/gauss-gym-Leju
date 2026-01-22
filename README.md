@@ -198,7 +198,7 @@ _reward_no_fly
 
 ```bash
 # 指定要回放的 run
-gauss_play --runner.load_run=<BIPED_S45_RUN_NAME> --sim_device=cuda:1 --rl_device=cuda:1 --headless=False --env.num_envs 1
+gauss_play --runner.load_run=biped_s45_2026-01-20-15-06-47 --runner.checkpoint=-1 --sim_device=cuda:0 --rl_device=cuda:0 --headless=False --env.num_envs 1
 
 # 或者自动选择最近一次 biped_s45 的 run
 gauss_play --task=biped_s45 --sim_device=cuda:1 --rl_device=cuda:1 --headless=False --env.num_envs 1   
@@ -277,5 +277,26 @@ gauss_train --task=biped_s45 --sim_device=cuda:1 --rl_device=cuda:1 --headless=T
 增强采样与完整帧支持：MotionClip 增加 frames_full，支持 get_full_frame* 系列方法与全量帧插值。  
 补齐对外接口：新增 get_frame_at_time、get_frame、get_full_frame_batch、feed_forward_generator、num_motions 等，行为对齐参考实现。  
 随机性一致：新增 self.np_rng，采样与时间抽样使用带 seed 的 RNG。  
+训练一天但是感觉角度映射还是不对，先不用amp再看看基本的能否训练好
 
+## 1.19
+未加amp训练——不会像18号那样说明amp的关节映射或者关节数量有问题  
+目前这版抬脚高度不够，会在地面蹭，而且上肢也存在乱动的现象，有时候会存在看见楼梯不上前，在原地偷奖励的现象  
+增强抬脚（feet_air_time.scale 增大到 6.0，max_air_time 增至 1.5s）。  
+加重脚滑和接触相关惩罚（feet_slip.scale 从 -0.1 → -0.5，feet_contact_forces.scale -0.001 → -0.002）。  
+惩罚无指令脚接触（feet_contact_without_cmd 从 +0.4 → -0.4）。  
+惩罚上肢乱动（track_default_arm_pos.scale 2.0 → 8.0，alpha 5.0 → 10.0）。  
+加重动作平滑与幅值惩罚（action_smoothness_l2 -0.01 → -0.02，action_magnitude -0.01 → -0.02）。  
+加重 pose 偏离惩罚（s45_pose.scale -0.1 → -0.5）。  
+加强防止“在楼梯前不动偷奖励”的设置（goal.dont_wait.scale -1.0 → -3.0，阈值减小为 0.1），并将 stand_still.scale -3 → -5。  
+其他：penalty_foothold -0.05 → -0.1，feet_phase.track_rew 开启并把 swing_height 设为 0.12。  
+
+
+## 1.20  
+存在看见楼梯不上去，骗奖励的情况  
+修改文件: viser_visualizer.py   
+增加了速度向量可视化（线段表示 x、y 指令与朝向），使用新的句柄 self._vel_vector_handle。  
+新增速度数值标签（/vel_label），显示当前速度指令对应的 m/s（由 normalized command × lin_vel_range[1] 计算）。  
+修复了原来速度句柄与目标位置点云共用同一变量导致的覆盖问题，目标位置点云现在使用 self._positions_handle，避免互相覆盖。  
+在 GUI 中新增 “Show Pred Confidence Heatmap” 与 “Show Pred-GT Height Diff” 复选框及一个用于高度差裁剪的滑条；update_pred_height_pcl 会根据选项用置信度或高度差着色（优先级：高度差 > 置信度 > 默认红强度）。
 ![alt text](image.png)

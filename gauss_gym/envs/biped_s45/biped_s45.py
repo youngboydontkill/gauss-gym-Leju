@@ -179,7 +179,7 @@ class BipedS45(LeggedRobot):
       elif name.startswith('zarm_'):
         weights.append(10.0)
       elif name.startswith('leg_'):
-        weights.append(0.1)
+        weights.append(0.)
       else:
         raise ValueError(f'Unknown dof name: {name}')
     weights = torch.tensor(weights, device=self.device)[None]

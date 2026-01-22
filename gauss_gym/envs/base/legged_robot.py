@@ -2306,6 +2306,24 @@ class LeggedRobot(base_task.BaseTask):
     reward *= ~self.command_manager.ignore_command_mask(self.scene_manager)
     return reward
 
+  def _reward_feet_clearance_height(self, clearance_target: float, use_command_mask: bool = True):
+    """
+    Reward feet for achieving a minimum clearance height during swing.
+    - `clearance_target`: target height (meters) that counts as a successful high step.
+    - `use_command_mask`: if True, reward is only applied when commands are active.
+
+    Implementation: use `self.swing_peak` (max foot height during swing) and reward the
+    positive amount above `clearance_target` at first ground contact. This encourages
+    larger foot lift when stepping onto obstacles like stairs.
+    """
+    # height above target per foot
+    height_above = (self.swing_peak - clearance_target).clip(min=0.0)
+    # only count at first contact to attribute reward once per swing
+    rew = torch.sum(height_above * self.first_contact, dim=-1)
+    if use_command_mask:
+      rew *= ~self.command_manager.ignore_command_mask(self.scene_manager)
+    return rew
+
   def _reward_no_fly(self):
     # Penalize flight (both feet are off the ground).
     # Use a simple contact filter to reduce PhysX mesh contact flicker.

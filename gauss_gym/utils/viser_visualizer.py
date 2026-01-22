@@ -104,7 +104,12 @@ class LeggedRobotViser:
     self._gs_handle = None
     self._axes_handle = None
     self._frustrum_handle = None
-    self._vel_handle = None
+    # Separate handles to avoid collisions between different visual elements
+    self._vel_vector_handle = None
+    self._real_vel_vector_handle = None
+    self._positions_handle = None
+    self._vel_label_handle = None
+    self._real_vel_label_handle = None
     self._robot_camera_handle = None
     self._contact_handles = None
     self._link_height_handle = None
@@ -300,6 +305,11 @@ class LeggedRobotViser:
         initial_value=False,
         hint='Toggle robot velocities visibility',
       )
+      self.show_real_velocities = self.server.gui.add_checkbox(
+        'Show Real Velocities',
+        initial_value=False,
+        hint='Toggle real robot velocity visualization',
+      )
       self.show_camera_axes = self.server.gui.add_checkbox(
         'Show Camera Axes', initial_value=False, hint='Toggle camera axes visibility'
       )
@@ -343,6 +353,20 @@ class LeggedRobotViser:
         'Show Predicted Height PCL',
         initial_value=False,
         hint='Toggle predicted height PCL visibility',
+      )
+      self.show_pred_confidence = self.server.gui.add_checkbox(
+        'Show Pred Confidence Heatmap',
+        initial_value=False,
+        hint='Color predicted point cloud by occupancy confidence',
+      )
+      self.show_pred_height_diff = self.server.gui.add_checkbox(
+        'Show Pred-GT Height Diff',
+        initial_value=False,
+        hint='Color predicted point cloud by signed height difference (pred - gt)',
+      )
+      # Slider to set clip range for height diff mapping (meters)
+      self.height_diff_clip = self.server.gui.add_slider(
+        'Height Diff Clip (m)', min=0.01, max=2.0, step=0.01, initial_value=0.5
       )
       self.show_pred_vel = self.server.gui.add_checkbox(
         'Show Predicted Velocity',
@@ -606,11 +630,37 @@ class LeggedRobotViser:
 
     gt_heights = gt_heights.reshape(-1, 3)
     pred_heights = pred_heights.reshape(-1, 3)
-    pred_probs = occupancy_grid_probs.reshape(
-      -1,
-    ).clip(0.0, 1.0)
+    pred_probs = occupancy_grid_probs.reshape(-1,).clip(0.0, 1.0)
+
     pred_colors = np.zeros_like(pred_heights, dtype=np.uint8)
-    pred_colors[..., 0] = 255 * pred_probs
+
+    # Coloring modes (priority): height-difference > confidence heatmap > default (red intensity)
+    if getattr(self, 'show_pred_height_diff', None) and self.show_pred_height_diff.value:
+      # Color by signed height difference (pred - gt)
+      diff = pred_heights[:, 2] - gt_heights[:, 2]
+      clip = float(self.height_diff_clip.value) if getattr(self, 'height_diff_clip', None) else 0.5
+      diff_norm = np.clip(diff / clip, -1.0, 1.0)
+      pos = diff_norm > 0
+      neg = ~pos
+      # Red channel for positive diff, Blue for negative
+      pred_colors[pos, 0] = (diff_norm[pos] * 255).astype(np.uint8)
+      pred_colors[pos, 1] = 0
+      pred_colors[pos, 2] = 0
+      pred_colors[neg, 0] = 0
+      pred_colors[neg, 1] = 0
+      pred_colors[neg, 2] = ((-diff_norm[neg]) * 255).astype(np.uint8)
+    elif getattr(self, 'show_pred_confidence', None) and self.show_pred_confidence.value:
+      # Confidence heatmap: map probability to an RGB gradient (blue -> cyan -> yellow -> red)
+      p = pred_probs
+      r = (np.clip(4 * (p - 0.75), 0.0, 1.0) * 255).astype(np.uint8)
+      g = (np.clip(4 * (p - 0.25), 0.0, 1.0) * 255).astype(np.uint8)
+      b = (np.clip(4 * (0.75 - p), 0.0, 1.0) * 255).astype(np.uint8)
+      pred_colors[..., 0] = r
+      pred_colors[..., 1] = g
+      pred_colors[..., 2] = b
+    else:
+      # Default: red intensity proportional to occupancy probability
+      pred_colors[..., 0] = (255 * pred_probs).astype(np.uint8)
 
     if self._pred_height_pcl_handle is None:
       self._pred_height_pcl_handle = self.server.scene.add_point_cloud(
@@ -769,17 +819,98 @@ class LeggedRobotViser:
     colors = np.array([[255, 255, 255], [255, 255, 255], [255, 255, 0]])[
       :, None
     ].repeat(2, axis=1)
-    if self._vel_handle is None:
-      self._vel_handle = self.server.scene.add_line_segments(
+    # Visualize commanded velocity vectors (3 segments: x command, y command, heading)
+    if self._vel_vector_handle is None:
+      self._vel_vector_handle = self.server.scene.add_line_segments(
         '/vel_command',
         points=vel_segments,
         colors=colors,
         visible=self.show_robot_velocities.value,
         line_width=4.0,
       )
+      # numeric label that shows commanded speed (m/s)
+      speed_norm = np.linalg.norm(
+        [
+          self.command_manager.velocity_command[env_idx, 0].item(),
+          self.command_manager.velocity_command[env_idx, 1].item(),
+        ]
+      )
+      try:
+        lin_vel_max = float(self.command_manager.lin_vel_range[1])
+      except Exception:
+        lin_vel_max = 1.0
+      speed_m_s = speed_norm * lin_vel_max
+      label_pos = vel_origin + np.array([0.0, 0.0, 0.3])
+      self._vel_label_handle = self.server.scene.add_label(
+        '/vel_label', text=f'{speed_m_s:.2f} m/s', visible=self.show_robot_velocities.value, position=label_pos
+      )
     else:
-      self._vel_handle.visible = self.show_robot_velocities.value
-      self._vel_handle.points = vel_segments
+      self._vel_vector_handle.visible = self.show_robot_velocities.value
+      self._vel_vector_handle.points = vel_segments
+      # update numeric label
+      speed_norm = np.linalg.norm(
+        [
+          self.command_manager.velocity_command[env_idx, 0].item(),
+          self.command_manager.velocity_command[env_idx, 1].item(),
+        ]
+      )
+      try:
+        lin_vel_max = float(self.command_manager.lin_vel_range[1])
+      except Exception:
+        lin_vel_max = 1.0
+      speed_m_s = speed_norm * lin_vel_max
+      if self._vel_label_handle is not None:
+        self._vel_label_handle.visible = self.show_robot_velocities.value
+        self._vel_label_handle.text = f'{speed_m_s:.2f} m/s'
+        self._vel_label_handle.position = vel_origin + np.array([0.0, 0.0, 0.3])
+
+    # Real (measured) velocities visualization
+    # Use filtered linear velocity from environment (assumed robot-local) and show a cyan vector + numeric label
+    filtered_lin = self.env.filtered_lin_vel[env_idx].cpu().numpy()
+    speed_real = np.linalg.norm(filtered_lin[:2])
+    try:
+      lin_vel_max = float(self.command_manager.lin_vel_range[1])
+    except Exception:
+      lin_vel_max = 1.0
+    real_x_scale = VEL_SCALE * filtered_lin[0] / lin_vel_max
+    real_y_scale = VEL_SCALE * filtered_lin[1] / lin_vel_max
+    real_x_world = robot_rot.apply(np.array([real_x_scale, 0, 0]))
+    real_y_world = robot_rot.apply(np.array([0, real_y_scale, 0]))
+    real_x_seg = np.stack([vel_origin, vel_origin + real_x_world], axis=0)
+    real_y_seg = np.stack([vel_origin, vel_origin + real_y_world], axis=0)
+    real_segments = np.stack([real_x_seg, real_y_seg], axis=0)
+    real_colors = np.array([[0, 255, 255], [0, 255, 255]])[:, None].repeat(2, axis=1)
+    if self._real_vel_vector_handle is None:
+      self._real_vel_vector_handle = self.server.scene.add_line_segments(
+        '/real_vel', points=real_segments, colors=real_colors, visible=self.show_real_velocities.value, line_width=3.0
+      )
+      label_pos_real = vel_origin + np.array([0.0, 0.0, 0.5])
+      self._real_vel_label_handle = self.server.scene.add_label(
+        '/real_vel_label', text=f'{speed_real:.2f} m/s', visible=self.show_real_velocities.value, position=label_pos_real
+      )
+    else:
+      self._real_vel_vector_handle.visible = self.show_real_velocities.value
+      self._real_vel_vector_handle.points = real_segments
+      if self._real_vel_label_handle is not None:
+        self._real_vel_label_handle.visible = self.show_real_velocities.value
+        self._real_vel_label_handle.text = f'{speed_real:.2f} m/s'
+        self._real_vel_label_handle.position = vel_origin + np.array([0.0, 0.0, 0.5])
+      # update numeric label
+      speed_norm = np.linalg.norm(
+        [
+          self.command_manager.velocity_command[env_idx, 0].item(),
+          self.command_manager.velocity_command[env_idx, 1].item(),
+        ]
+      )
+      try:
+        lin_vel_max = float(self.command_manager.lin_vel_range[1])
+      except Exception:
+        lin_vel_max = 1.0
+      speed_m_s = speed_norm * lin_vel_max
+      if self._vel_label_handle is not None:
+        self._vel_label_handle.visible = self.show_robot_velocities.value
+        self._vel_label_handle.text = f'{speed_m_s:.2f} m/s'
+        self._vel_label_handle.position = vel_origin + np.array([0.0, 0.0, 0.3])
 
   def update_goals(self, env_idx: int):
     goal_position = self.command_manager.goal_position[env_idx].cpu().numpy()
@@ -814,8 +945,8 @@ class LeggedRobotViser:
     line_segement = np.stack([np.array([0, 0, 0]), rel_pos_robot], axis=0)[None]
     line_segement = line_segement + curr_pos[env_idx].cpu().numpy()[None, None]
 
-    if self._vel_handle is None:
-      self._vel_handle = self.server.scene.add_point_cloud(
+    if self._positions_handle is None:
+      self._positions_handle = self.server.scene.add_point_cloud(
         '/positions',
         points=np.stack([goal_position, init_position], axis=0),
         colors=np.array([[0, 255, 0], [0, 0, 255]]),
@@ -846,8 +977,8 @@ class LeggedRobotViser:
         # position=curr_trans_inv.translation(),
       )
     else:
-      self._vel_handle.visible = self.show_robot_velocities.value
-      self._vel_handle.points = np.stack([goal_position, init_position], axis=0)
+      self._positions_handle.visible = self.show_robot_velocities.value
+      self._positions_handle.points = np.stack([goal_position, init_position], axis=0)
       self._heading_handle.visible = self.show_robot_velocities.value
       self._heading_handle.points = np.stack(
         [goal_heading_point, init_heading_point], axis=0

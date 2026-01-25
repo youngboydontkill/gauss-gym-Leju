@@ -1,6 +1,7 @@
 import isaacgym  # noqa: F401
 
 import torch
+import re
 
 from gauss_gym.envs import LeggedRobot
 from gauss_gym.utils import math_utils
@@ -267,4 +268,104 @@ class BipedS45(LeggedRobot):
 
   def _reward_fly(self):
     return self._reward_no_fly()
+
+  def _reward_undesired_contacts(self, body_names, threshold: float = 1.0):
+    if not hasattr(self, '_undesired_contact_indices'):
+      patterns = [re.compile(p) for p in body_names]
+      indices = []
+      for i, name in enumerate(self.body_names):
+        if any(p.fullmatch(name) or p.match(name) for p in patterns):
+          indices.append(i)
+      self._undesired_contact_indices = torch.tensor(
+        indices, dtype=torch.long, device=self.device
+      )
+    if self._undesired_contact_indices.numel() == 0:
+      return torch.zeros(self.num_envs, dtype=torch.float32, device=self.device)
+    contact_mag = torch.norm(
+      self.contact_forces[:, self._undesired_contact_indices, :], dim=-1
+    )
+    return torch.sum((contact_mag > threshold).float(), dim=1)
+
+  def _reward_joint_deviation_hip(self):
+    if not hasattr(self, '_hip_joint_indices'):
+      names = [
+        'leg_l1_joint', 'leg_l2_joint', 'leg_r1_joint', 'leg_r2_joint'
+      ]
+      idxs = [self.dof_names.index(n) for n in names if n in self.dof_names]
+      self._hip_joint_indices = torch.tensor(idxs, device=self.device)
+    if self._hip_joint_indices.numel() == 0:
+      return torch.zeros(self.num_envs, dtype=torch.float32, device=self.device)
+    dof_pos = self.dof_pos[:, self._hip_joint_indices]
+    default_pos = self.default_dof_pos[:, self._hip_joint_indices]
+    return torch.sum(torch.abs(dof_pos - default_pos), dim=-1)
+
+  def _reward_joint_deviation_arms(self):
+    if not hasattr(self, '_arm_joint_indices'):
+      idxs = [i for i, name in enumerate(self.dof_names) if name.startswith('zarm_')]
+      self._arm_joint_indices = torch.tensor(idxs, device=self.device)
+    if self._arm_joint_indices.numel() == 0:
+      return torch.zeros(self.num_envs, dtype=torch.float32, device=self.device)
+    dof_pos = self.dof_pos[:, self._arm_joint_indices]
+    default_pos = self.default_dof_pos[:, self._arm_joint_indices]
+    return torch.sum(torch.abs(dof_pos - default_pos), dim=-1)
+
+  def _reward_torques_main(self):
+    if not hasattr(self, '_torque_main_indices'):
+      idxs = []
+      for i, name in enumerate(self.dof_names):
+        if name.startswith('zarm_'):
+          idxs.append(i)
+          continue
+        if name.startswith('leg_l') or name.startswith('leg_r'):
+          if name.endswith('_joint'):
+            joint_num = name.split('_')[1][1:]
+            if joint_num in {'1', '2', '3', '4', '5'}:
+              idxs.append(i)
+      self._torque_main_indices = torch.tensor(idxs, device=self.device)
+    if self._torque_main_indices.numel() == 0:
+      return torch.zeros(self.num_envs, dtype=torch.float32, device=self.device)
+    return torch.sum(torch.square(self.torques[:, self._torque_main_indices]), dim=-1)
+
+  def _reward_torques_ankle(self):
+    if not hasattr(self, '_torque_ankle_indices'):
+      names = ['leg_l6_joint', 'leg_r6_joint']
+      idxs = [self.dof_names.index(n) for n in names if n in self.dof_names]
+      self._torque_ankle_indices = torch.tensor(idxs, device=self.device)
+    if self._torque_ankle_indices.numel() == 0:
+      return torch.zeros(self.num_envs, dtype=torch.float32, device=self.device)
+    return torch.sum(torch.square(self.torques[:, self._torque_ankle_indices]), dim=-1)
+
+  def _reward_illegal_dof_barrier(self):
+    names = ['leg_l5_joint', 'leg_l6_joint', 'leg_r5_joint', 'leg_r6_joint']
+    idxs = [self.dof_names.index(n) for n in names if n in self.dof_names]
+    if len(idxs) != 4:
+      return torch.zeros(self.num_envs, dtype=torch.float32, device=self.device)
+    ankle_joint_pos = self.dof_pos[:, idxs]
+    feasible_region = torch.tensor(
+      [
+        [0.87, 0.5, -0.40],
+        [-1.0, 0.0, -0.87],
+        [-0.63, -0.78, -0.94],
+        [0.87, -0.5, -0.4],
+        [0.0, -1.0, -0.8],
+        [-0.63, 0.78, -0.94],
+        [0.0, 1.0, -0.8],
+      ],
+      device=ankle_joint_pos.device,
+    )
+    eps = 0.05
+    left_side = -feasible_region[:, -1] - torch.matmul(
+      ankle_joint_pos[:, :2], feasible_region[:, :-1].T
+    )
+    right_side = -feasible_region[:, -1] - torch.matmul(
+      ankle_joint_pos[:, 2:], feasible_region[:, :-1].T
+    )
+    left_mask = (left_side < -eps).any(dim=-1)
+    right_mask = (right_side < -eps).any(dim=-1)
+    left_side[left_mask] = 0.0
+    right_side[right_mask] = 0.0
+    max_penalty = 25.0
+    l_penalty = torch.clamp(-torch.log(left_side + eps), min=0, max=max_penalty)
+    r_penalty = torch.clamp(-torch.log(right_side + eps), min=0, max=max_penalty)
+    return (l_penalty + r_penalty).sum(dim=1)
 

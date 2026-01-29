@@ -198,7 +198,7 @@ _reward_no_fly
 
 ```bash
 # 指定要回放的 run
-gauss_play --runner.load_run=biped_s45_2026-01-20-15-06-47 --runner.checkpoint=-1 --sim_device=cuda:0 --rl_device=cuda:0 --headless=False --env.num_envs 1
+gauss_play --runner.load_run=biped_s45_2026-01-23-09-50-38 --runner.checkpoint=-1 --sim_device=cuda:0 --rl_device=cuda:0 --headless=False --env.num_envs 1
 
 # 或者自动选择最近一次 biped_s45 的 run
 gauss_play --task=biped_s45 --sim_device=cuda:1 --rl_device=cuda:1 --headless=False --env.num_envs 1   
@@ -246,23 +246,11 @@ gauss_train --task=biped_s45 \
 ``` bash
 python -m gauss_gym.scripts.print_obs_order --config gauss_gym/envs/biped_s45/config_vision.yaml --no-sim  
 ```  
-```  
-[policy]
-  base_ang_vel
-  projected_gravity
-  gait_progress
-  velocity_commands
-  dof_pos
-    dof_order(dof_pos) = ['leg_l1_joint', 'leg_l2_joint', 'leg_l3_joint', 'leg_l4_joint', 'leg_l5_joint', 'leg_l6_joint', 'leg_r1_joint', 'leg_r2_joint', 'leg_r3_joint', 'leg_r4_joint', 'leg_r5_joint', 'leg_r6_joint', 'zarm_l1_joint', 'zarm_l2_joint', 'zarm_l3_joint', 'zarm_l4_joint', 'zarm_l5_joint', 'zarm_l6_joint', 'zarm_l7_joint', 'zarm_r1_joint', 'zarm_r2_joint', 'zarm_r3_joint', 'zarm_r4_joint', 'zarm_r5_joint', 'zarm_r6_joint', 'zarm_r7_joint', 'zhead_1_joint', 'zhead_2_joint']
-  dof_vel
-    dof_order(dof_vel) = ['leg_l1_joint', 'leg_l2_joint', 'leg_l3_joint', 'leg_l4_joint', 'leg_l5_joint', 'leg_l6_joint', 'leg_r1_joint', 'leg_r2_joint', 'leg_r3_joint', 'leg_r4_joint', 'leg_r5_joint', 'leg_r6_joint', 'zarm_l1_joint', 'zarm_l2_joint', 'zarm_l3_joint', 'zarm_l4_joint', 'zarm_l5_joint', 'zarm_l6_joint', 'zarm_l7_joint', 'zarm_r1_joint', 'zarm_r2_joint', 'zarm_r3_joint', 'zarm_r4_joint', 'zarm_r5_joint', 'zarm_r6_joint', 'zarm_r7_joint', 'zhead_1_joint', 'zhead_2_joint']
-  actions
-    dof_order(actions) = ['leg_l1_joint', 'leg_l2_joint', 'leg_l3_joint', 'leg_l4_joint', 'leg_l5_joint', 'leg_l6_joint', 'leg_r1_joint', 'leg_r2_joint', 'leg_r3_joint', 'leg_r4_joint', 'leg_r5_joint', 'leg_r6_joint', 'zarm_l1_joint', 'zarm_l2_joint', 'zarm_l3_joint', 'zarm_l4_joint', 'zarm_l5_joint', 'zarm_l6_joint', 'zarm_l7_joint', 'zarm_r1_joint', 'zarm_r2_joint', 'zarm_r3_joint', 'zarm_r4_joint', 'zarm_r5_joint', 'zarm_r6_joint', 'zarm_r7_joint', 'zhead_1_joint', 'zhead_2_joint']
-  origin_amp_obs joint names: ['leg_l1_joint', 'leg_l2_joint', 'leg_l3_joint',  'leg_l4_joint', 'leg_l5_joint', 'leg_l6_joint', 'leg_r1_joint', 'leg_r2_joint', 'leg_r3_joint', 'leg_r4_joint', 'leg_r5_joint', 'leg_r6_joint', 'zarm_l1_joint', 'zarm_l2_joint', 'zarm_l3_joint', 'zarm_l4_joint', 'zarm_l5_joint', 'zarm_l6_joint', 'zarm_l7_joint', 'zarm_r1_joint', 'zarm_r2_joint', 'zarm_r3_joint', 'zarm_r4_joint', 'zarm_r5_joint', 'zarm_r6_joint', 'zarm_r7_joint']
-  origin_amp_obs end-effector names: ['leg_l6_link', 'leg_r6_link', 'zarm_l7_link',       'zarm_r7_link']
+gym:['leg_l1_joint', 'leg_l2_joint', 'leg_l3_joint', 'leg_l4_joint', 'leg_l5_joint', 'leg_l6_joint', 'leg_r1_joint', 'leg_r2_joint', 'leg_r3_joint', 'leg_r4_joint', 'leg_r5_joint', 'leg_r6_joint', 'zarm_l1_joint', 'zarm_l2_joint', 'zarm_l3_joint', 'zarm_l4_joint', 'zarm_l5_joint', 'zarm_l6_joint', 'zarm_l7_joint', 'zarm_r1_joint', 'zarm_r2_joint', 'zarm_r3_joint', 'zarm_r4_joint', 'zarm_r5_joint', 'zarm_r6_joint', 'zarm_r7_joint']
 
-  image_encoder
-```  
+
+lab:['leg_l1_joint', 'leg_r1_joint', 'zarm_l1_joint', 'zarm_r1_joint', 'leg_l2_joint', 'leg_r2_joint', 'zarm_l2_joint', 'zarm_r2_joint', 'leg_l3_joint', 'leg_r3_joint', 'zarm_l3_joint', 'zarm_r3_joint', 'leg_l4_joint', 'leg_r4_joint', 'zarm_l4_joint', 'zarm_r4_joint', 'leg_l5_joint', 'leg_r5_joint', 'zarm_l5_joint', 'zarm_r5_joint', 'leg_l6_joint', 'leg_r6_joint', 'zarm_l6_joint', 'zarm_r6_joint', 'zarm_l7_joint', 'zarm_r7_joint']
+
 ## 1.15 
 得加角度限制
 

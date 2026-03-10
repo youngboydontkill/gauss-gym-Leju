@@ -588,10 +588,22 @@ class LeggedRobot(base_task.BaseTask):
       assert orig_rew.shape == self.rew_buf.shape, (
         f'{orig_rew.shape} != {self.rew_buf.shape}'
       )
+      
+      # --- Add code-level normalization/clamping ---
+      # Clip raw reward to a sensible range (e.g. [-100, 100]) before scaling
+      # This prevents single outliers from dominating gradients
+      orig_rew = torch.clamp(orig_rew, min=-100.0, max=100.0)
+      
       rew = orig_rew * scale
+      
       if self.cfg['reward_penalty_curriculum']['apply']:
         if name in self.cfg['reward_penalty_curriculum']['keys']:
           rew *= self.reward_penalty_scale
+      
+      # Optional: Hard clamp the final scaled reward to avoid single-term explosion
+      # Typical locomotion rewards shouldn't exceed ~5.0 per step for a single term
+      rew = torch.clamp(rew, min=-10.0, max=10.0)
+      
       self.rew_buf += rew
       self.rew_dict[name] = rew
       self.episode_sums[name] += rew

@@ -74,3 +74,14 @@ task_registry.register(
     pathlib.Path(gauss_gym.GAUSS_GYM_ENVS_DIR) / 'biped_s45' / 'config_vision.yaml'
   ),
 )
+
+
+task_registry.register(
+  'biped_s45_no_vision',
+  BipedS45,
+  config.from_yaml(
+    pathlib.Path(gauss_gym.GAUSS_GYM_ENVS_DIR)
+    / 'biped_s45'
+    / 'config_without_vision.yaml'
+  ),
+)

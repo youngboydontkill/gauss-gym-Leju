@@ -151,18 +151,19 @@ control:
   # their default_joint_angles (since action=0 targets default_dof_pos).
   exclude_action_dof_names: ['zhead_1_joint', 'zhead_2_joint']
   stiffness: # [N*m/rad]
-    leg_l1_joint: 100.0
-    leg_r1_joint: 100.0
-    leg_l2_joint: 100.0
-    leg_r2_joint: 100.0
-    leg_l3_joint: 100.0
-    leg_r3_joint: 100.0
-    leg_l4_joint: 150.0
-    leg_r4_joint: 150.0
-    leg_l5_joint: 40.0
-    leg_r5_joint: 40.0
-    leg_l6_joint: 40.0
-    leg_r6_joint: 40.0
+  # 踝关节： 并联参数 
+    leg_l1_joint: 35
+    leg_r1_joint: 35
+    leg_l2_joint: 35
+    leg_r2_joint: 35
+    leg_l3_joint: 60
+    leg_r3_joint: 60
+    leg_l4_joint: 100
+    leg_r4_joint: 100.0
+    leg_l5_joint: 8
+    leg_r5_joint: 8
+    leg_l6_joint: 8
+    leg_r6_joint: 8
     zarm_l1_joint: 30.0
     zarm_r1_joint: 30.0
     zarm_l2_joint: 30.0
@@ -184,14 +185,14 @@ control:
     leg_r1_joint: 4.0
     leg_l2_joint: 4.0
     leg_r2_joint: 4.0
-    leg_l3_joint: 4.0
-    leg_r3_joint: 4.0
-    leg_l4_joint: 8.0
-    leg_r4_joint: 8.0
-    leg_l5_joint: 4.0
-    leg_r5_joint: 4.0
-    leg_l6_joint: 4.0
-    leg_r6_joint: 4.0
+    leg_l3_joint: 5.0
+    leg_r3_joint: 5.0
+    leg_l4_joint: 6.0
+    leg_r4_joint: 6.0
+    leg_l5_joint: 3.0
+    leg_r5_joint: 3.0
+    leg_l6_joint: 3.0
+    leg_r6_joint: 3.0
     zarm_l1_joint: 3.0
     zarm_r1_joint: 3.0
     zarm_l2_joint: 3.0
@@ -527,7 +528,7 @@ commands:
 
     max_traj_pos_distance: 1.0
     max_traj_yaw_distance_rad: 6.28
-    still_proportion: 0.05
+    still_proportion: 0.0
 
     resampling_time: 4.
 
@@ -560,10 +561,10 @@ rewards:
 
   task:
     velocity:
-      vel_tracking.scale: 10.0
-      vel_tracking.tracking_sigma: 0.5
-      yaw_vel_tracking.scale: 1.0
-      yaw_vel_tracking.tracking_sigma: 0.5
+      vel_tracking.scale: 15.0
+      vel_tracking.tracking_sigma: 0.15
+      yaw_vel_tracking.scale: 2.0
+      yaw_vel_tracking.tracking_sigma: 0.2
     goal:
       pos_tracking.scale: 0.0
       yaw_tracking.scale: 0.0
@@ -576,31 +577,16 @@ rewards:
       dont_wait.scale: 0.0
       dont_wait.vel_threshold: 0.1
   survival.scale: 0.0
-  lin_vel_z.scale: 0.5
-  ang_vel_xy.scale: -0.05
-  orientation.scale: -3
+  lin_vel_z.scale: -0.0
+  ang_vel_xy.scale: -0.4
+  orientation.scale: -1.5
   action_rate.scale: -0.02
   action_rate.use_action_mean: False
-  action_smoothness_l2.scale: -0.05
+  action_smoothness_l2.scale: -0.01
   base_height.scale: 0.0
   base_height.height_target: 0.655
-  s45_pose.scale: 0.7
-  knee_bend:
-    scale: 0.0
-    knee_joint_names: ['leg_l4_joint', 'leg_r4_joint']
-    threshold: 1.2
-  feet_distance.scale: 0.0
-  feet_distance.close_feet_threshold: 0.10
-  feet_splay.scale: 0.0
-  feet_splay.splay_threshold: 0.10
+  s45_pose.scale: 0.0
   no_fly.scale: 0.0
-  feet_phase.scale: 1
-  feet_phase.swing_height: 0.18
-  feet_phase.track_rew: True
-  stumble.scale: 0.0
-  stumble.multiplier: 3.0
-  feet_slip.scale: -0.1
-  feet_slip.xy_only: True
   collision.scale: -1.0
   action_magnitude:
     scale: 0.0
@@ -618,30 +604,20 @@ rewards:
   dof_pos_limits:
     scale: -0.5
     soft_dof_pos_limit: 0.9
+  # 足部协调
   feet_air_time:
     scale: 3.0
     min_air_time: 0.5
-    max_air_time: 2
+    max_air_time: 1.4
   feet_contact_forces:
-    scale: -0.001
+    scale: -0.0
     max_contact_force: 900
   feet_contact_without_cmd:
-    scale: 0.4
+    scale: 0.0
     use_stance_mask: True
   no_feet_contact:
     scale: -1
     use_stance_mask: True
-  joint_deviation_hip.scale: -0.1
-  joint_deviation_arms.scale: -1
-  undesired_contacts:
-    scale: -0.1
-    body_names:
-      [
-        'leg_l1_link', 'leg_l2_link', 'leg_l3_link', 'leg_l4_link', 'leg_l5_link',
-        'leg_r1_link', 'leg_r2_link', 'leg_r3_link', 'leg_r4_link', 'leg_r5_link',
-        'base_link', 'zarm_.*_link'
-      ]
-    threshold: 1.0
   feet_stumble:
     scale: -1.0
     multiplier: 3.0
@@ -651,10 +627,35 @@ rewards:
     scale: 0.5
     clearance_target: 0.14
     use_command_mask: True
-
   feet_swing:
     scale: 0.0
     swing_period: 0.6
+  feet_distance.scale: 0.0
+  feet_distance.close_feet_threshold: 0.10
+  feet_splay.scale: 0.0
+  feet_phase.scale: 1
+  feet_phase.swing_height: 0.18
+  feet_phase.track_rew: True
+  stumble.scale: 0.0
+  stumble.multiplier: 3.0
+  feet_slip.scale: -0.1 # 减少滑动
+  feet_slip.xy_only: True
+  feet_splay.splay_threshold: 0.10
+
+
+
+  joint_deviation_hip.scale: -0.0
+  joint_deviation_arms.scale: -0.2
+  undesired_contacts:
+    scale: -0.5
+    body_names:
+      [
+        'leg_l1_link', 'leg_l2_link', 'leg_l3_link', 'leg_l4_link', 'leg_l5_link',
+        'leg_r1_link', 'leg_r2_link', 'leg_r3_link', 'leg_r4_link', 'leg_r5_link',
+        'base_link', 'zarm_.*_link'
+      ]
+    threshold: 1.0
+
   illegal_dof_barrier.scale: -0.03
   termination.scale: -100.0
 reward_penalty_curriculum:
@@ -697,8 +698,8 @@ sim:
     rest_offset: 0.0
     bounce_threshold_velocity: 0.2
     max_depenetration_velocity: 1.0
-    max_gpu_contact_pairs: 8_388_608 # 2^23
-    default_buffer_size_multiplier: 5.0
+    max_gpu_contact_pairs: 16_777_216 # 2^24
+    default_buffer_size_multiplier: 8.0
     contact_collection: 2
 
 image_encoder:

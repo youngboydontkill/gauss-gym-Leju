@@ -288,3 +288,17 @@ gauss_train --task=biped_s45 --sim_device=cuda:1 --rl_device=cuda:1 --headless=T
 修复了原来速度句柄与目标位置点云共用同一变量导致的覆盖问题，目标位置点云现在使用 self._positions_handle，避免互相覆盖。  
 在 GUI 中新增 “Show Pred Confidence Heatmap” 与 “Show Pred-GT Height Diff” 复选框及一个用于高度差裁剪的滑条；update_pred_height_pcl 会根据选项用置信度或高度差着色（优先级：高度差 > 置信度 > 默认红强度）。
 ![alt text](image.png)
+
+## 3.19  
+使用串联PD参数训练，但是会出现站在原地骗奖励的情况：奖励与终止机制导致的“风险规避停走”。本次改动（用于缓解“到某方位后不给走”的保守策略）：   
+```bash
+commands.velocity.still_proportion: 0.05 -> 0.0  
+rewards.task.velocity.vel_tracking.scale: 10.0 -> 15.0  
+rewards.task.velocity.vel_tracking.tracking_sigma: 0.5 -> 0.15  
+rewards.task.velocity.yaw_vel_tracking.scale: 1.0 -> 2.0  
+rewards.task.velocity.yaw_vel_tracking.tracking_sigma: 0.5 -> 0.2  
+rewards.ang_vel_xy.scale: -0.8 -> -0.4  
+rewards.orientation.scale: -3 -> -1.5  
+rewards.feet_slip.scale: -0.2 -> -0.1  
+rewards.joint_deviation_arms.scale: -0.8 -> -0.2  
+```
